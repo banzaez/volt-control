@@ -18,7 +18,7 @@ mkdir -p "${RESOURCES_DIR}"
 
 cp "${BUILD_DIR}/${APP_NAME}" "${MACOS_DIR}/${APP_NAME}"
 
-echo "🎨 Генерация иконки приложения AppIcon.icns (macOS 27 Glass)..."
+echo "🎨 Генерация минималистичной иконки AppIcon.icns..."
 ICONSET_DIR=$(mktemp -d)/AppIcon.iconset
 mkdir -p "${ICONSET_DIR}"
 
@@ -43,58 +43,42 @@ NSGraphicsContext.saveGraphicsState()
 NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
 
 let rect = NSRect(x: 64, y: 64, width: 896, height: 896)
-let squircle = NSBezierPath(roundedRect: rect, xRadius: 210, yRadius: 210)
+let squircle = NSBezierPath(roundedRect: rect, xRadius: 205, yRadius: 205)
 
-// Base Liquid Glass Gradient
+// Minimalist Graphite Gradient
 let bgGradient = NSGradient(colors: [
-    NSColor(calibratedRed: 0.06, green: 0.12, blue: 0.26, alpha: 1.0),
-    NSColor(calibratedRed: 0.04, green: 0.25, blue: 0.36, alpha: 1.0),
-    NSColor(calibratedRed: 0.05, green: 0.48, blue: 0.42, alpha: 1.0)
+    NSColor(calibratedWhite: 0.22, alpha: 1.0),
+    NSColor(calibratedWhite: 0.11, alpha: 1.0)
 ])!
-bgGradient.draw(in: squircle, angle: -45)
+bgGradient.draw(in: squircle, angle: -90)
 
-// Ambient Cyan & Mint Glow
-let glowRect = NSRect(x: 200, y: 180, width: 620, height: 620)
-let glowPath = NSBezierPath(ovalIn: glowRect)
-let glowGrad = NSGradient(starting: NSColor(calibratedRed: 0.1, green: 0.95, blue: 0.75, alpha: 0.42), ending: .clear)!
-glowGrad.draw(in: glowPath, relativeCenterPosition: .zero)
-
-// Inner Glass Battery Body
-let battRect = NSRect(x: 230, y: 340, width: 510, height: 344)
-let battPath = NSBezierPath(roundedRect: battRect, xRadius: 96, yRadius: 96)
-NSColor(calibratedWhite: 1.0, alpha: 0.14).setFill()
-battPath.fill()
-battPath.lineWidth = 22
-NSColor(calibratedWhite: 1.0, alpha: 0.72).setStroke()
-battPath.stroke()
-
-// Battery Positive Terminal
-let capRect = NSRect(x: 765, y: 442, width: 42, height: 140)
-let capPath = NSBezierPath(roundedRect: capRect, xRadius: 20, yRadius: 20)
-NSColor(calibratedWhite: 1.0, alpha: 0.72).setFill()
-capPath.fill()
-
-// Battery Charge Fill
-let fillRect = NSRect(x: 266, y: 376, width: 370, height: 272)
-let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: 68, yRadius: 68)
-let fillGrad = NSGradient(colors: [
-    NSColor(calibratedRed: 0.10, green: 0.88, blue: 0.65, alpha: 0.95),
-    NSColor(calibratedRed: 0.08, green: 0.75, blue: 0.96, alpha: 0.95)
-])!
-fillGrad.draw(in: fillPath, angle: 0)
-
-// Specular Rim on Squircle
-squircle.lineWidth = 18
-NSColor(calibratedWhite: 1.0, alpha: 0.45).setStroke()
+// Subtle Rim
+squircle.lineWidth = 14
+NSColor(calibratedWhite: 1.0, alpha: 0.25).setStroke()
 squircle.stroke()
 
-// Center Lightning Bolt Symbol
+// Minimalist Battery Outline
+let battRect = NSRect(x: 235, y: 342, width: 510, height: 340)
+let battPath = NSBezierPath(roundedRect: battRect, xRadius: 92, yRadius: 92)
+NSColor(calibratedWhite: 1.0, alpha: 0.08).setFill()
+battPath.fill()
+battPath.lineWidth = 24
+NSColor(calibratedWhite: 1.0, alpha: 0.88).setStroke()
+battPath.stroke()
+
+// Positive Terminal Cap
+let capRect = NSRect(x: 770, y: 448, width: 38, height: 128)
+let capPath = NSBezierPath(roundedRect: capRect, xRadius: 18, yRadius: 18)
+NSColor(calibratedWhite: 1.0, alpha: 0.78).setFill()
+capPath.fill()
+
+// Center Bolt Symbol
 if let symbol = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil) {
-    let config = NSImage.SymbolConfiguration(pointSize: 340, weight: .black)
+    let config = NSImage.SymbolConfiguration(pointSize: 230, weight: .bold)
     if let configured = symbol.withSymbolConfiguration(config) {
         let symSize = configured.size
         let symRect = NSRect(
-            x: 512 - symSize.width / 2,
+            x: 490 - symSize.width / 2,
             y: 512 - symSize.height / 2,
             width: symSize.width,
             height: symSize.height
@@ -136,7 +120,7 @@ cat << 'EOF' > "${CONTENTS_DIR}/Info.plist"
     <key>CFBundleName</key>
     <string>VoltControl</string>
     <key>CFBundleDisplayName</key>
-    <string>ВольтКонтроль</string>
+    <string>VoltControl</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

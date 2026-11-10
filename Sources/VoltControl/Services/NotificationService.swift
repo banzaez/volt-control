@@ -7,7 +7,7 @@ public final class NotificationService: Sendable {
     private init() {}
 
     public func requestAuthorization() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, error in
             if let error = error {
                 print("Notification permission error: \(error.localizedDescription)")
             }
@@ -35,27 +35,27 @@ public final class NotificationService: Sendable {
 
     public func notifyLimitReached(level: Int, target: Int) {
         sendNotification(
-            title: "Лимит заряда достигнут",
-            subtitle: "\(level)% заряда",
-            body: "Аккумулятор достиг целевого лимита \(target)%. Зарядка остановлена для сохранения ресурса батареи.",
+            title: "VoltControl",
+            subtitle: "Лимит заряда \(target)% достигнут",
+            body: "Заряд аккумулятора составляет \(level)%. Зарядка приостановлена для сохранения ресурса батареи.",
             identifier: "voltcontrol.limit.reached"
         )
     }
 
     public func notifyTopUpCompleted() {
         sendNotification(
-            title: "Зарядка до 100% завершена",
-            subtitle: "Аккумулятор полностью заряжен",
-            body: "Режим полной зарядки выполнен. ВольтКонтроль вернулся к режиму защиты аккумулятора.",
+            title: "VoltControl",
+            subtitle: "Зарядка до 100% завершена",
+            body: "Аккумулятор полностью заряжен. VoltControl вернулся к обычному режиму ограничения.",
             identifier: "voltcontrol.topup.completed"
         )
     }
 
     public func notifyOverheating(temperature: Double) {
         sendNotification(
-            title: "Предупреждение о температуре",
-            subtitle: String(format: "Температура: %.1f°C", temperature),
-            body: "Температура аккумулятора превысила безопасный порог. Зарядка временно приостановлена для охлаждения.",
+            title: "VoltControl",
+            subtitle: String(format: "Температура батареи: %.1f°C", temperature),
+            body: "Температура превысила заданный порог. Зарядка временно приостановлена.",
             identifier: "voltcontrol.temperature.warning"
         )
     }

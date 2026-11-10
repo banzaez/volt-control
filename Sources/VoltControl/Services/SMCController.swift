@@ -92,11 +92,9 @@ public final class SMCController: @unchecked Sendable {
     }
 
     public func verifyPrivileges() {
-        // Test write attempt (or check if root)
         if getuid() == 0 {
             status = .activePrivileged
         } else {
-            // Check if privileged helper tool exists
             let helperPath = "/Library/PrivilegedHelperTools/com.voltcontrol.helper"
             if FileManager.default.fileExists(atPath: helperPath) {
                 status = .activePrivileged
@@ -106,14 +104,45 @@ public final class SMCController: @unchecked Sendable {
         }
     }
 
+    /// Reads a 4-byte IEEE-754 float SMC key (such as PSTR for system watts, PDTR for adapter watts)
+    public func readFloat(key: String) -> Double? {
+        guard connection != 0 else { return nil }
+
+        var infoIn = SMCParamStruct()
+        infoIn.key = fourCharCode(key)
+        infoIn.data8 = 9
+        var infoOut = SMCParamStruct()
+        var sz = MemoryLayout<SMCParamStruct>.stride
+        let krInfo = IOConnectCallStructMethod(connection, 2, &infoIn, sz, &infoOut, &sz)
+        guard krInfo == kIOReturnSuccess && infoOut.result == 0 && infoOut.keyInfo.dataSize == 4 else {
+            return nil
+        }
+
+        var readIn = SMCParamStruct()
+        readIn.key = fourCharCode(key)
+        readIn.keyInfo.dataSize = 4
+        readIn.data8 = 5
+        var readOut = SMCParamStruct()
+        var rSz = MemoryLayout<SMCParamStruct>.stride
+        let krRead = IOConnectCallStructMethod(connection, 2, &readIn, rSz, &readOut, &rSz)
+        guard krRead == kIOReturnSuccess && readOut.result == 0 else {
+            return nil
+        }
+
+        let val = withUnsafeBytes(of: readOut.bytes) { ptr in
+            ptr.load(as: Float.self)
+        }
+        guard val.isFinite else { return nil }
+        return Double(val)
+    }
+
     /// Read an SMC key as raw bytes
     public func readBytes(key: String) -> [UInt8]? {
         guard connection != 0 else { return nil }
 
-        // Step 1: Query Key Info
         var infoIn = SMCParamStruct()
         infoIn.key = fourCharCode(key)
-        infoIn.data8 = 9 // SMC_CMD_READ_KEYINFO
+        infoIn.data8 = 9
         var infoOut = SMCParamStruct()
         var sz = MemoryLayout<SMCParamStruct>.stride
         let krInfo = IOConnectCallStructMethod(connection, 2, &infoIn, sz, &infoOut, &sz)
@@ -123,11 +152,10 @@ public final class SMCController: @unchecked Sendable {
 
         let size = Int(infoOut.keyInfo.dataSize)
 
-        // Step 2: Read Bytes
         var readIn = SMCParamStruct()
         readIn.key = fourCharCode(key)
         readIn.keyInfo.dataSize = infoOut.keyInfo.dataSize
-        readIn.data8 = 5 // SMC_CMD_READ_BYTES
+        readIn.data8 = 5
         var readOut = SMCParamStruct()
         var rSz = MemoryLayout<SMCParamStruct>.stride
         let krRead = IOConnectCallStructMethod(connection, 2, &readIn, rSz, &readOut, &rSz)
@@ -143,7 +171,6 @@ public final class SMCController: @unchecked Sendable {
     public func writeBytes(key: String, bytes: [UInt8]) -> Bool {
         guard connection != 0 else { return false }
 
-        // Query key info first
         var infoIn = SMCParamStruct()
         infoIn.key = fourCharCode(key)
         infoIn.data8 = 9
@@ -157,7 +184,7 @@ public final class SMCController: @unchecked Sendable {
         var writeIn = SMCParamStruct()
         writeIn.key = fourCharCode(key)
         writeIn.keyInfo.dataSize = infoOut.keyInfo.dataSize
-        writeIn.data8 = 6 // SMC_CMD_WRITE_BYTES
+        writeIn.data8 = 6
 
         var tupleBytes = writeIn.bytes
         withUnsafeMutableBytes(of: &tupleBytes) { ptr in
@@ -176,16 +203,13 @@ public final class SMCController: @unchecked Sendable {
     /// Sets charge inhibit state: true = stop charging (AC bypass), false = resume charging
     @discardableResult
     public func setChargeInhibited(_ inhibit: Bool) -> Bool {
-        // If we are root:
         if getuid() == 0 {
-            // Apple Silicon SMC keys
             let value: UInt8 = inhibit ? 0x02 : 0x00
             let resCH0B = writeBytes(key: "CH0B", bytes: [value])
             let resCH0C = writeBytes(key: "CH0C", bytes: [value])
             return resCH0B || resCH0C
         }
 
-        // Check if helper daemon is installed
         let helperPath = "/Library/PrivilegedHelperTools/com.voltcontrol.helper"
         if FileManager.default.fileExists(atPath: helperPath) {
             let cmd = "\(helperPath) \(inhibit ? "inhibit" : "enable")"
@@ -200,7 +224,6 @@ public final class SMCController: @unchecked Sendable {
         return false
     }
 
-    /// Sets hardware charge limit percentage (e.g. 80 on Intel BCLM or Apple Silicon B0CM)
     @discardableResult
     public func setHardwareChargeLimit(percentage: Int) -> Bool {
         let val = UInt8(clamping: percentage)

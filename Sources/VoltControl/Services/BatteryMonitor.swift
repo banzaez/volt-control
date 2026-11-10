@@ -13,7 +13,7 @@ public final class BatteryMonitor {
     private var timer: Timer?
     private var lastNotifiedLevel: Int?
     private var lastNotifiedOverheatTime: Date?
-    private var lastDisconnectDate: Date? = Date().addingTimeInterval(-7800) // Default to ~2h session
+    private var lastDisconnectDate: Date? = Date().addingTimeInterval(-7800)
     private let settings = AppSettings.shared
     private let smc = SMCController.shared
     private let notifications = NotificationService.shared
@@ -26,8 +26,7 @@ public final class BatteryMonitor {
         guard !isMonitoring else { return }
         isMonitoring = true
         fetchSnapshot()
-        
-        // Poll every 2 seconds
+
         DispatchQueue.main.async { [weak self] in
             self?.timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
                 Task { @MainActor [weak self] in
@@ -75,26 +74,73 @@ public final class BatteryMonitor {
         let level = battDict["CurrentCapacity"] as? Int ?? 0
         let bData = battDict["BatteryData"] as? [String: Any] ?? [:]
         let pDist = battDict["PowerDistribution"] as? [String: Any] ?? [:]
+        let ptd = battDict["PowerTelemetryData"] as? [String: Any] ?? [:]
         let packBData = packDict["BatteryData"] as? [String: Any] ?? [:]
 
-        // Battery Power in mW
-        let battPowerMW = (bData["BatteryPower"] as? NSNumber)?.doubleValue ?? 0.0
-        let battWatts = battPowerMW / 1000.0
+        // Telemetry values from PowerTelemetryData (in mW)
+        let ptdSystemPowerInWatts = ((ptd["SystemPowerIn"] as? NSNumber)?.doubleValue ?? 0.0) / 1000.0
+        let ptdSystemLoadWatts = ((ptd["SystemLoad"] as? NSNumber)?.doubleValue ?? 0.0) / 1000.0
+        let ptdBattWatts = ((ptd["BatteryPower"] as? NSNumber)?.doubleValue ?? 0.0) / 1000.0
 
-        // Adapter Power in mW
-        let inputPowerMW = (pDist["IPDInputPower"] as? NSNumber)?.doubleValue ?? 0.0
-        let adapterWatts = inputPowerMW / 1000.0
+        // Gas gauge BatteryPower (in mW)
+        let bDataBattWatts = ((bData["BatteryPower"] as? NSNumber)?.doubleValue ?? 0.0) / 1000.0
+        let ipdInputWatts = ((pDist["IPDInputPower"] as? NSNumber)?.doubleValue ?? 0.0) / 1000.0
 
-        // System consumption (Mac consumption)
+        // Real-time SMC float sensors (PSTR = System Load, PDTR = DC-In Adapter Power)
+        let smcAdapterWatts = smc.readFloat(key: "PDTR")
+        let smcSystemWatts = smc.readFloat(key: "PSTR")
+
+        let adapterWatts: Double
         let systemWatts: Double
+        let battWatts: Double
+
         if isAC {
-            if battWatts > 0 {
-                systemWatts = max(0.5, adapterWatts - battWatts)
+            // 1. Adapter Power Input
+            if let pdtr = smcAdapterWatts, pdtr > 0.2 {
+                adapterWatts = pdtr
+            } else if ptdSystemPowerInWatts > 0.2 {
+                adapterWatts = ptdSystemPowerInWatts
             } else {
-                systemWatts = max(0.5, adapterWatts + abs(battWatts))
+                adapterWatts = ipdInputWatts
+            }
+
+            // 2. Mac System Power Consumption
+            if let pstr = smcSystemWatts, pstr > 0.2 {
+                systemWatts = pstr
+            } else if ptdSystemLoadWatts > 0.2 {
+                systemWatts = ptdSystemLoadWatts
+            } else {
+                systemWatts = max(0.5, adapterWatts - max(0, bDataBattWatts))
+            }
+
+            // 3. Power going into (or out of) Battery
+            if isChg {
+                if adapterWatts > systemWatts + 0.1 {
+                    battWatts = adapterWatts - systemWatts
+                } else if ptdBattWatts > 0.1 {
+                    battWatts = ptdBattWatts
+                } else {
+                    battWatts = max(0.1, bDataBattWatts)
+                }
+            } else {
+                if ptdBattWatts < -0.2 {
+                    battWatts = ptdBattWatts
+                } else {
+                    battWatts = 0.0
+                }
             }
         } else {
-            systemWatts = max(0.5, abs(battWatts))
+            adapterWatts = 0.0
+            if let pstr = smcSystemWatts, pstr > 0.2 {
+                systemWatts = pstr
+                battWatts = -pstr
+            } else if abs(bDataBattWatts) > 0.1 {
+                systemWatts = abs(bDataBattWatts)
+                battWatts = -abs(bDataBattWatts)
+            } else {
+                systemWatts = max(0.5, ptdSystemLoadWatts)
+                battWatts = -systemWatts
+            }
         }
 
         // Temperature (pack temperature in hundredths of a degree Celsius)
@@ -141,7 +187,6 @@ public final class BatteryMonitor {
             newInfo.elapsedTimeSeconds = Int(Date().timeIntervalSince(lastDisconnectDate ?? Date()))
         }
 
-        // Evaluate automated charge controls & limits
         evaluateChargeControl(info: &newInfo)
 
         DispatchQueue.main.async {
@@ -190,7 +235,6 @@ public final class BatteryMonitor {
                     return
                 }
             } else {
-                // Allow charging to 100%
                 info.isChargingInhibited = false
                 smc.setChargeInhibited(false)
                 return
@@ -208,7 +252,6 @@ public final class BatteryMonitor {
                 lastNotifiedLevel = limit
             }
         } else {
-            // Below target limit
             if settings.sailingModeEnabled {
                 let threshold = limit - settings.sailingDelta
                 if info.currentPercentage <= threshold {

@@ -15,7 +15,7 @@
     <key>CFBundleName</key>
     <string>VoltControl</string>
     <key>CFBundleDisplayName</key>
-    <string>ВольтКонтроль</string>
+    <string>VoltControl</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

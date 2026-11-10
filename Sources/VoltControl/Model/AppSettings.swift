@@ -37,11 +37,11 @@ public enum MenuBarIconStyle: String, CaseIterable, Identifiable, Sendable {
     public var localizedTitle: String {
         switch self {
         case .glassPill:
-            return "Капсула macOS 27 (процент внутри)"
+            return "Капсула с процентом внутри"
         case .classicBattery:
             return "Классический аккумулятор"
         case .minimalBolt:
-            return "Минималистичный символ энергии"
+            return "Минималистичный символ"
         }
     }
 }
@@ -287,7 +287,7 @@ public final class AppSettings {
         let modeRaw = d.string(forKey: "menuBarDisplayMode") ?? MenuBarDisplayMode.iconOnly.rawValue
         self.menuBarDisplayMode = MenuBarDisplayMode(rawValue: modeRaw) ?? .iconOnly
 
-        self.menuBarColorizedIcon = d.object(forKey: "menuBarColorizedIcon") != nil ? d.bool(forKey: "menuBarColorizedIcon") : true
+        self.menuBarColorizedIcon = d.object(forKey: "menuBarColorizedIcon") != nil ? d.bool(forKey: "menuBarColorizedIcon") : false
 
         self.notifyOnLimitReached = d.object(forKey: "notifyOnLimitReached") != nil ? d.bool(forKey: "notifyOnLimitReached") : true
         self.notifyOnFull = d.object(forKey: "notifyOnFull") != nil ? d.bool(forKey: "notifyOnFull") : true

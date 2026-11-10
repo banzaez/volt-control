@@ -107,14 +107,13 @@ public final class MenuBarController: NSObject {
             let hostingController = NSHostingController(rootView: settingsView)
 
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 680, height: 650),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                contentRect: NSRect(x: 0, y: 0, width: 660, height: 620),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false
             )
-            window.title = "ВольтКонтроль — Настройки"
-            window.titlebarAppearsTransparent = true
-            window.minSize = NSSize(width: 640, height: 540)
+            window.title = "VoltControl — Настройки"
+            window.minSize = NSSize(width: 620, height: 520)
             window.contentViewController = hostingController
             window.isReleasedWhenClosed = false
             window.center()
