@@ -10,6 +10,10 @@ let package = Package(
         .executable(
             name: "VoltControl",
             targets: ["VoltControl"]
+        ),
+        .executable(
+            name: "VoltControlHelper",
+            targets: ["VoltControlHelper"]
         )
     ],
     targets: [
@@ -19,6 +23,10 @@ let package = Package(
             swiftSettings: [
                 .enableUpcomingFeature("ApproachableConcurrency")
             ]
+        ),
+        .executableTarget(
+            name: "VoltControlHelper",
+            path: "Sources/VoltControlHelper"
         ),
         .testTarget(
             name: "VoltControlTests",

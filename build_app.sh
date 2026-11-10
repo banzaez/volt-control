@@ -17,6 +17,10 @@ mkdir -p "${MACOS_DIR}"
 mkdir -p "${RESOURCES_DIR}"
 
 cp "${BUILD_DIR}/${APP_NAME}" "${MACOS_DIR}/${APP_NAME}"
+if [ -f "${BUILD_DIR}/VoltControlHelper" ]; then
+    cp "${BUILD_DIR}/VoltControlHelper" "${RESOURCES_DIR}/com.voltcontrol.helper"
+    chmod +x "${RESOURCES_DIR}/com.voltcontrol.helper"
+fi
 
 echo "🎨 Генерация иконки синего кубика LEGO сбоку (AppIcon.icns)..."
 ICONSET_DIR=$(mktemp -d)/AppIcon.iconset

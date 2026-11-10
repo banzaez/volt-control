@@ -38,6 +38,43 @@ public struct MainPopoverView: View {
             }
 
             // MARK: - 4. Пункты меню
+            if !SMCController.shared.isPrivileged && monitor.info.isACConnected {
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.shield.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.orange)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Управление зарядкой SMC")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.primary)
+                        Text("Требуется активация хелпера")
+                            .font(.system(size: 9.5))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Button("Включить") {
+                        _ = SMCController.shared.installPrivilegedHelper()
+                        monitor.fetchSnapshot()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.mini)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.orange.opacity(0.12))
+                )
+                .padding(.horizontal, 10)
+                .padding(.top, 4)
+                .padding(.bottom, 2)
+
+                menuDivider
+            }
+
             VStack(spacing: 1) {
                 NativeMenuItem(
                     title: "Зарядить до 100%",
@@ -102,7 +139,7 @@ public struct MainPopoverView: View {
             }
 
             if settings.menuShowTimeRemaining {
-                summaryRow(label: "Осталось времени", value: monitor.info.timeRemainingFormatted)
+                summaryRow(label: monitor.info.timeRemainingLabel, value: monitor.info.timeRemainingFormatted)
             }
 
             if settings.menuShowElapsedTime && !monitor.info.isACConnected {
@@ -224,18 +261,18 @@ public struct MainPopoverView: View {
 
             if settings.menuShowPowerSplitBar && isAC {
                 let total = max(0.5, sysWatts + battChargeWatts)
-                let sysShare = isChg ? min(max(0.12, sysWatts / total), 0.88) : 1.0
+                let battShare = isChg ? min(max(0.12, battChargeWatts / total), 0.88) : 0.0
                 GeometryReader { geo in
-                    HStack(spacing: 2) {
-                        Capsule()
-                            .fill(Color.primary.opacity(0.45))
-                            .frame(width: geo.size.width * CGFloat(sysShare), height: 3)
+                    HStack(spacing: isChg ? 2 : 0) {
                         if isChg {
                             Capsule()
                                 .fill(Color.blue.opacity(0.65))
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 3)
+                                .frame(width: geo.size.width * CGFloat(battShare), height: 3)
                         }
+                        Capsule()
+                            .fill(Color.primary.opacity(0.45))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 3)
                     }
                 }
                 .frame(height: 3)

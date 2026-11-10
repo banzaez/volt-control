@@ -1034,21 +1034,10 @@ public struct SettingsView: View {
     }
 
     private func installHelperScript() {
-        let script = "osascript -e 'do shell script \"echo Helper verified\" with administrator privileges'"
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/bin/sh")
-        proc.arguments = ["-c", script]
-        do {
-            try proc.run()
-            proc.waitUntilExit()
-            if proc.terminationStatus == 0 {
-                helperStatusText = "Права администратора подтверждены"
-                SMCController.shared.verifyPrivileges()
-            } else {
-                helperStatusText = "Отменено пользователем"
-            }
-        } catch {
-            helperStatusText = "Ошибка: \(error.localizedDescription)"
+        let (success, message) = SMCController.shared.installPrivilegedHelper()
+        helperStatusText = message
+        if success {
+            BatteryMonitor.shared.fetchSnapshot()
         }
     }
 }

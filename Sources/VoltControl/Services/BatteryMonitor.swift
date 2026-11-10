@@ -77,6 +77,85 @@ public final class BatteryMonitor {
         Double(signedInt64(anyVal)) / 1000.0
     }
 
+    private func computeTimeRemainingMinutes(
+        isAC: Bool,
+        isCharging: Bool,
+        currentLevel: Int,
+        battDict: [String: Any],
+        fcc: Int,
+        remCap: Int,
+        amps: Int,
+        volts: Double,
+        battWatts: Double,
+        sysWatts: Double
+    ) -> Int? {
+        if !isAC {
+            // 1. Работа от батареи (разрядка)
+            let iokitVal = (battDict["AvgTimeToEmpty"] as? Int)
+                ?? (battDict["TimeRemaining"] as? Int)
+                ?? (battDict["InstantTimeToEmpty"] as? Int)
+
+            if let val = iokitVal, val > 0, val < 65535 {
+                return val
+            }
+
+            // Физический расчет времени разряда при задержке IOKit (65535 / nil)
+            let dischargeAmps = abs(amps) > 50 ? abs(amps) : Int((sysWatts / max(1.0, volts)) * 1000.0)
+            if dischargeAmps > 50 && remCap > 0 {
+                let estimatedMinutes = Int((Double(remCap) / Double(dischargeAmps)) * 60.0)
+                if estimatedMinutes > 0 && estimatedMinutes < 2400 {
+                    return estimatedMinutes
+                }
+            }
+            return nil
+        }
+
+        // 2. Подключено к сети, но зарядка не идет (пауза / 100%)
+        guard isCharging else {
+            return nil
+        }
+
+        // 3. Зарядка
+        let isFullTarget = settings.isTopUpActive || settings.chargeLimit >= 100
+        if isFullTarget {
+            // Расчет до 100%
+            let iokitVal = (battDict["AvgTimeToFull"] as? Int)
+                ?? (battDict["TimeRemaining"] as? Int)
+
+            if let val = iokitVal, val > 0, val < 65535 {
+                return val
+            }
+
+            let chargeAmps = amps > 50 ? amps : Int((battWatts / max(1.0, volts)) * 1000.0)
+            let neededMah = max(0, fcc - remCap)
+            if chargeAmps > 50 && neededMah > 0 {
+                return max(1, Int((Double(neededMah) / Double(chargeAmps)) * 60.0))
+            }
+            return nil
+        } else {
+            // Расчет до пользовательского лимита (например, 80%)
+            let limit = settings.chargeLimit
+            if currentLevel >= limit {
+                return 0
+            }
+
+            let targetMah = Double(fcc) * (Double(limit) / 100.0)
+            let neededMah = max(0.0, targetMah - Double(remCap))
+            let chargeAmps = amps > 50 ? amps : Int((battWatts / max(1.0, volts)) * 1000.0)
+
+            if chargeAmps > 50 && neededMah > 0 {
+                let minutesToLimit = max(1, Int((neededMah / Double(chargeAmps)) * 60.0))
+                return minutesToLimit
+            } else if let iokitVal = (battDict["AvgTimeToFull"] as? Int) ?? (battDict["TimeRemaining"] as? Int),
+                      iokitVal > 0, iokitVal < 65535 {
+                let remainingPercentTo100 = max(1, 100 - currentLevel)
+                let neededPercentToLimit = max(1, limit - currentLevel)
+                return max(1, (iokitVal * neededPercentToLimit) / remainingPercentTo100)
+            }
+            return nil
+        }
+    }
+
     public func fetchSnapshot() {
         var newInfo = BatteryInfo()
 
@@ -222,8 +301,20 @@ public final class BatteryMonitor {
             ?? (bData["Voltage"] as? NSNumber)?.doubleValue ?? 0.0
         let volts = rawVolt / 1000.0
         let amps = Int(signedInt64(battDict["Amperage"] ?? battDict["InstantAmperage"]))
-        let timeRemaining = battDict["TimeRemaining"] as? Int
         let fullyCharged = (battDict["FullyCharged"] as? Bool ?? false) || (level >= 100 && !isChg)
+
+        let timeRemaining = computeTimeRemainingMinutes(
+            isAC: isAC,
+            isCharging: isChg,
+            currentLevel: level,
+            battDict: battDict,
+            fcc: fcc,
+            remCap: remCap,
+            amps: amps,
+            volts: volts,
+            battWatts: battWatts,
+            sysWatts: systemWatts
+        )
 
         newInfo.currentPercentage = level
         newInfo.isCharging = isChg
@@ -268,13 +359,21 @@ public final class BatteryMonitor {
     private func evaluateChargeControl(info: inout BatteryInfo) {
         guard info.isACConnected else {
             info.isChargingInhibited = false
+            info.requiresPrivilegedHelper = false
             return
         }
 
+        let isPrivileged = smc.isPrivileged
+        let wantsInhibit = settings.isChargingPaused || (info.currentPercentage >= settings.chargeLimit && !settings.isTopUpActive)
+        info.requiresPrivilegedHelper = wantsInhibit && !isPrivileged
+
         // 1. Temperature Protection
         if settings.tempProtectionEnabled && info.temperatureCelsius >= settings.maxAllowedTempCelsius {
-            info.isChargingInhibited = true
-            smc.setChargeInhibited(true)
+            let ok = smc.pauseCharging()
+            info.isChargingInhibited = ok || !isPrivileged
+            if info.isChargingInhibited {
+                info.isCharging = false
+            }
 
             if settings.notifyOnOverheat {
                 let now = Date()
@@ -286,10 +385,13 @@ public final class BatteryMonitor {
             return
         }
 
-        // 2. Manual Pause Mode
+        // 2. Manual Pause Mode ("Работать от батареи" / Force Discharge)
         if settings.isChargingPaused {
-            info.isChargingInhibited = true
-            smc.setChargeInhibited(true)
+            let ok = smc.forceDischarge()
+            info.isChargingInhibited = ok || !isPrivileged
+            if info.isChargingInhibited {
+                info.isCharging = false
+            }
             return
         }
 
@@ -301,13 +403,14 @@ public final class BatteryMonitor {
                     if settings.notifyOnFull {
                         notifications.notifyTopUpCompleted()
                     }
+                    _ = smc.pauseCharging()
                     info.isChargingInhibited = true
-                    smc.setChargeInhibited(true)
+                    info.isCharging = false
                     return
                 }
             } else {
+                _ = smc.resumeCharging()
                 info.isChargingInhibited = false
-                smc.setChargeInhibited(false)
                 return
             }
         }
@@ -315,8 +418,9 @@ public final class BatteryMonitor {
         // 4. Target Charge Limit
         let limit = settings.chargeLimit
         if info.currentPercentage >= limit {
+            _ = smc.pauseCharging()
             info.isChargingInhibited = true
-            smc.setChargeInhibited(true)
+            info.isCharging = false
 
             if settings.notifyOnLimitReached && lastNotifiedLevel != limit {
                 notifications.notifyLimitReached(level: info.currentPercentage, target: limit)
@@ -326,13 +430,13 @@ public final class BatteryMonitor {
             if settings.sailingModeEnabled {
                 let threshold = limit - settings.sailingDelta
                 if info.currentPercentage <= threshold {
+                    _ = smc.setHardwareChargeLimit(percentage: limit)
                     info.isChargingInhibited = false
-                    smc.setChargeInhibited(false)
                     lastNotifiedLevel = nil
                 }
             } else {
+                _ = smc.setHardwareChargeLimit(percentage: limit)
                 info.isChargingInhibited = false
-                smc.setChargeInhibited(false)
                 lastNotifiedLevel = nil
             }
         }
@@ -343,7 +447,10 @@ public final class BatteryMonitor {
         settings.isTopUpActive.toggle()
         if settings.isTopUpActive {
             settings.isChargingPaused = false
-            smc.setChargeInhibited(false)
+            if !smc.isPrivileged {
+                _ = smc.installPrivilegedHelper()
+            }
+            _ = smc.resumeCharging()
         }
         fetchSnapshot()
     }
@@ -351,6 +458,9 @@ public final class BatteryMonitor {
     public func setQuickLimit(_ limit: Int) {
         settings.chargeLimit = limit
         settings.isTopUpActive = false
+        if !smc.isPrivileged {
+            _ = smc.installPrivilegedHelper()
+        }
         fetchSnapshot()
     }
 
@@ -358,9 +468,12 @@ public final class BatteryMonitor {
         settings.isChargingPaused.toggle()
         if settings.isChargingPaused {
             settings.isTopUpActive = false
-            smc.setChargeInhibited(true)
+            if !smc.isPrivileged {
+                _ = smc.installPrivilegedHelper()
+            }
+            _ = smc.forceDischarge()
         } else {
-            smc.setChargeInhibited(false)
+            _ = smc.setHardwareChargeLimit(percentage: settings.chargeLimit)
         }
         fetchSnapshot()
     }

@@ -20,5 +20,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
 
     public func applicationWillTerminate(_ notification: Notification) {
         BatteryMonitor.shared.stopMonitoring()
+        _ = SMCController.shared.setChargeInhibited(false)
     }
 }

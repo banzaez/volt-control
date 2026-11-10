@@ -68,6 +68,7 @@ public struct BatteryInfo: Sendable {
     public var timeRemainingMinutes: Int? = nil
     public var elapsedTimeSeconds: Int = 0
     public var isChargingInhibited: Bool = false
+    public var requiresPrivilegedHelper: Bool = false
     public var isTopUpActive: Bool = false
     public var chargeLimit: Int = 80
 
@@ -94,14 +95,39 @@ public struct BatteryInfo: Sendable {
         return min(max(health, 0.0), 100.0)
     }
 
-    public var timeRemainingFormatted: String {
-        guard let minutes = timeRemainingMinutes, minutes > 0, minutes < 65535 else {
-            if isFullyCharged {
-                return "Полностью заряжен"
+    public var timeRemainingLabel: String {
+        if !isACConnected {
+            return "Осталось работы"
+        }
+        if isFullyCharged || currentPercentage >= 100 {
+            return "Состояние"
+        }
+        if isACConnected && !isTopUpActive && chargeLimit < 100 && currentPercentage >= chargeLimit {
+            return "Лимит заряда (\(chargeLimit)%)"
+        }
+        if isCharging {
+            if !isTopUpActive && chargeLimit < 100 {
+                return "До лимита (\(chargeLimit)%)"
+            } else {
+                return "До полной зарядки"
             }
-            if isACConnected && !isCharging {
+        }
+        return "Режим питания"
+    }
+
+    public var timeRemainingFormatted: String {
+        if isFullyCharged || currentPercentage >= 100 {
+            return "Полностью заряжен"
+        }
+        if isACConnected {
+            if !isTopUpActive && chargeLimit < 100 && currentPercentage >= chargeLimit {
+                return "Лимит достигнут (\(currentPercentage)%)"
+            }
+            if !isCharging {
                 return "Питание от сети"
             }
+        }
+        guard let minutes = timeRemainingMinutes, minutes > 0, minutes < 65535 else {
             return "Расчёт..."
         }
         let hours = minutes / 60
@@ -127,6 +153,9 @@ public struct BatteryInfo: Sendable {
     public var appModeDescription: String {
         if !isACConnected {
             return "Зарядное устройство не подключено"
+        }
+        if requiresPrivilegedHelper {
+            return "Пауза: требуется хелпер в Настройках"
         }
         if isTopUpActive {
             return "Зарядка до 100%"

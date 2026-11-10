@@ -2,13 +2,13 @@ import AppKit
 import SwiftUI
 
 @MainActor
-public final class MenuBarController: NSObject, NSWindowDelegate {
+public final class MenuBarController: NSObject, NSWindowDelegate, NSPopoverDelegate {
     public static let shared = MenuBarController()
 
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var settingsWindow: NSWindow?
-    private var updateTimer: Timer?
+    private var lastRenderKey: String = ""
 
     private override init() {
         super.init()
@@ -32,6 +32,7 @@ public final class MenuBarController: NSObject, NSWindowDelegate {
         let pop = NSPopover()
         pop.behavior = .transient
         pop.animates = true
+        pop.delegate = self
 
         let popoverView = MainPopoverView(
             onOpenSettings: { [weak self] in
@@ -46,23 +47,25 @@ public final class MenuBarController: NSObject, NSWindowDelegate {
         pop.contentViewController = hostingController
         self.popover = pop
 
-        // Update menu bar appearance immediately and periodically in .common RunLoop mode
-        updateMenuBar()
-        let timer = Timer(timeInterval: 1.5, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.updateMenuBar()
-            }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        self.updateTimer = timer
+        // Update menu bar appearance immediately
+        updateMenuBar(force: true)
     }
 
     @MainActor
-    public func updateMenuBar(with providedInfo: BatteryInfo? = nil) {
+    public func updateMenuBar(with providedInfo: BatteryInfo? = nil, force: Bool = false) {
         guard let button = statusItem?.button else { return }
 
         let info = providedInfo ?? BatteryMonitor.shared.info
         let settings = AppSettings.shared
+
+        // Optimization: Dirty check to avoid redundant image creation and CoreGraphics drawing
+        let renderKey = "\(info.currentPercentage)_\(info.isACConnected)_\(info.isCharging)_\(info.isChargingInhibited)_\(settings.menuBarIconStyle.rawValue)_\(settings.menuBarDisplayMode.rawValue)_\(settings.menuBarColorizedIcon)_\(Int(info.batteryPowerWatts * 10))_\(Int(info.systemPowerWatts * 10))_\(Int(info.temperatureCelsius * 10))"
+
+        if !force && renderKey == lastRenderKey {
+            return
+        }
+        lastRenderKey = renderKey
+
         let (icon, title) = MenuBarIconRenderer.renderIcon(info: info, settings: settings)
 
         button.image = icon
@@ -94,10 +97,19 @@ public final class MenuBarController: NSObject, NSWindowDelegate {
             popover.performClose(sender)
         } else {
             BatteryMonitor.shared.fetchSnapshot()
-            HighEnergyAppService.shared.refresh()
+            HighEnergyAppService.shared.setMenuVisible(true)
             popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }
+    }
+
+    // MARK: - NSPopoverDelegate
+    public func popoverWillShow(_ notification: Notification) {
+        HighEnergyAppService.shared.setMenuVisible(true)
+    }
+
+    public func popoverDidClose(_ notification: Notification) {
+        HighEnergyAppService.shared.setMenuVisible(false)
     }
 
     @MainActor

@@ -246,7 +246,7 @@ public enum MenuBarIconRenderer {
             // When charger is connected, draw crisp centered lightning bolt
             if isACConnected {
                 let boltCenter = NSPoint(x: bodyRect.midX, y: bodyRect.midY)
-                drawVectorBolt(center: boltCenter, height: 9.8, color: NSColor.labelColor, filled: true)
+                drawVectorBolt(center: boltCenter, height: 9.8, color: NSColor.labelColor, filled: isCharging)
             }
 
             return true
@@ -271,7 +271,13 @@ public enum MenuBarIconRenderer {
         bolt.line(to: NSPoint(x: cx + w * 0.04, y: cy + h * 0.04))
         bolt.close()
 
-        color.setFill()
-        bolt.fill()
+        if filled {
+            color.setFill()
+            bolt.fill()
+        } else {
+            bolt.lineWidth = 1.0
+            color.setStroke()
+            bolt.stroke()
+        }
     }
 }

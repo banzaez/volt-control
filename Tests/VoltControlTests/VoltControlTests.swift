@@ -43,20 +43,42 @@ struct VoltControlTests {
         #expect(info.adapterPowerWatts == 35.0)
     }
 
-    @Test("Time Remaining Formatter")
+    @Test("Time Remaining Formatter and Labels")
     func testTimeRemaining() {
         var info = BatteryInfo()
-        info.isCharging = true
-        info.timeRemainingMinutes = 75
-        #expect(info.timeRemainingFormatted == "1 ч 15 мин")
-
+        info.isACConnected = false
         info.isCharging = false
         info.timeRemainingMinutes = 150
+        #expect(info.timeRemainingLabel == "Осталось работы")
         #expect(info.timeRemainingFormatted == "2 ч 30 мин")
 
+        info.isACConnected = true
+        info.isCharging = true
+        info.chargeLimit = 80
+        info.isTopUpActive = false
+        info.timeRemainingMinutes = 25
+        #expect(info.timeRemainingLabel == "До лимита (80%)")
+        #expect(info.timeRemainingFormatted == "25 мин")
+
+        info.chargeLimit = 100
+        info.timeRemainingMinutes = 75
+        #expect(info.timeRemainingLabel == "До полной зарядки")
+        #expect(info.timeRemainingFormatted == "1 ч 15 мин")
+
         info.isFullyCharged = true
+        info.isCharging = false
         info.timeRemainingMinutes = nil
         #expect(info.timeRemainingFormatted == "Полностью заряжен")
+
+        // Test limit reached / exceeded (84% with 80% limit)
+        var limitInfo = BatteryInfo()
+        limitInfo.isACConnected = true
+        limitInfo.currentPercentage = 84
+        limitInfo.chargeLimit = 80
+        limitInfo.isTopUpActive = false
+        limitInfo.timeRemainingMinutes = 0
+        #expect(limitInfo.timeRemainingLabel == "Лимит заряда (80%)")
+        #expect(limitInfo.timeRemainingFormatted == "Лимит достигнут (84%)")
     }
 
     @Test("Settings Defaults")

@@ -54,6 +54,10 @@ public final class SMCController: @unchecked Sendable {
     private var connection: io_connect_t = 0
     public private(set) var status: SMCStatus = .userModeMonitoring
 
+    public var isPrivileged: Bool {
+        status == .activePrivileged
+    }
+
     private init() {
         openSMC()
         verifyPrivileges()
@@ -94,13 +98,69 @@ public final class SMCController: @unchecked Sendable {
     public func verifyPrivileges() {
         if getuid() == 0 {
             status = .activePrivileged
-        } else {
-            let helperPath = "/Library/PrivilegedHelperTools/com.voltcontrol.helper"
-            if FileManager.default.fileExists(atPath: helperPath) {
+            return
+        }
+
+        let helperPath = "/Library/PrivilegedHelperTools/com.voltcontrol.helper"
+        guard FileManager.default.isExecutableFile(atPath: helperPath) else {
+            status = .userModeMonitoring
+            return
+        }
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: helperPath)
+        proc.arguments = ["status"]
+        proc.standardOutput = Pipe()
+        proc.standardError = Pipe()
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+            if proc.terminationStatus == 0 {
                 status = .activePrivileged
             } else {
                 status = .userModeMonitoring
             }
+        } catch {
+            status = .userModeMonitoring
+        }
+    }
+
+    @discardableResult
+    public func installPrivilegedHelper() -> (Bool, String) {
+        let targetPath = "/Library/PrivilegedHelperTools/com.voltcontrol.helper"
+        let bundledHelper = Bundle.main.url(forResource: "com.voltcontrol.helper", withExtension: nil)?.path
+            ?? "\(Bundle.main.bundlePath)/Contents/Resources/com.voltcontrol.helper"
+        let releaseHelper = ".build/release/VoltControlHelper"
+        let debugHelper = ".build/debug/VoltControlHelper"
+
+        let sourcePath: String
+        if FileManager.default.fileExists(atPath: bundledHelper) {
+            sourcePath = bundledHelper
+        } else if FileManager.default.fileExists(atPath: releaseHelper) {
+            sourcePath = releaseHelper
+        } else if FileManager.default.fileExists(atPath: debugHelper) {
+            sourcePath = debugHelper
+        } else {
+            return (false, "Бинарник com.voltcontrol.helper не найден в бандле")
+        }
+
+        let cmd = "mkdir -p /Library/PrivilegedHelperTools && cp -f '\(sourcePath)' '\(targetPath)' && chown root:wheel '\(targetPath)' && chmod 4755 '\(targetPath)'"
+        let script = "osascript -e 'do shell script \"\(cmd)\" with administrator privileges'"
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/sh")
+        proc.arguments = ["-c", script]
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+            if proc.terminationStatus == 0 {
+                verifyPrivileges()
+                return (status == .activePrivileged, "Хелпер успешно установлен")
+            } else {
+                return (false, "Установка отменена пользователем")
+            }
+        } catch {
+            return (false, "Ошибка запуска: \(error.localizedDescription)")
         }
     }
 
@@ -183,7 +243,7 @@ public final class SMCController: @unchecked Sendable {
 
         var writeIn = SMCParamStruct()
         writeIn.key = fourCharCode(key)
-        writeIn.keyInfo.dataSize = infoOut.keyInfo.dataSize
+        writeIn.keyInfo = infoOut.keyInfo
         writeIn.data8 = 6
 
         var tupleBytes = writeIn.bytes
@@ -200,38 +260,91 @@ public final class SMCController: @unchecked Sendable {
         return krWrite == kIOReturnSuccess && writeOut.result == 0
     }
 
-    /// Sets charge inhibit state: true = stop charging (AC bypass), false = resume charging
+    // MARK: - Charge Control Actions
     @discardableResult
-    public func setChargeInhibited(_ inhibit: Bool) -> Bool {
-        if getuid() == 0 {
-            let value: UInt8 = inhibit ? 0x02 : 0x00
-            let resCH0B = writeBytes(key: "CH0B", bytes: [value])
-            let resCH0C = writeBytes(key: "CH0C", bytes: [value])
-            return resCH0B || resCH0C
-        }
+    public func pauseCharging() -> Bool {
+        runHelperCommand(["pause"])
+    }
 
-        let helperPath = "/Library/PrivilegedHelperTools/com.voltcontrol.helper"
-        if FileManager.default.fileExists(atPath: helperPath) {
-            let cmd = "\(helperPath) \(inhibit ? "inhibit" : "enable")"
-            let proc = Process()
-            proc.executableURL = URL(fileURLWithPath: "/bin/sh")
-            proc.arguments = ["-c", cmd]
-            try? proc.run()
-            proc.waitUntilExit()
-            return proc.terminationStatus == 0
-        }
-
-        return false
+    @discardableResult
+    public func forceDischarge() -> Bool {
+        runHelperCommand(["discharge"])
     }
 
     @discardableResult
     public func setHardwareChargeLimit(percentage: Int) -> Bool {
-        let val = UInt8(clamping: percentage)
-        if getuid() == 0 {
-            let resB0CM = writeBytes(key: "B0CM", bytes: [val])
-            let resBCLM = writeBytes(key: "BCLM", bytes: [val])
-            return resB0CM || resBCLM
+        runHelperCommand(["limit", "\(percentage)"])
+    }
+
+    @discardableResult
+    public func resumeCharging() -> Bool {
+        runHelperCommand(["enable"])
+    }
+
+    @discardableResult
+    public func setChargeInhibited(_ inhibit: Bool, limit: Int = 80) -> Bool {
+        if inhibit {
+            return pauseCharging()
+        } else {
+            return setHardwareChargeLimit(percentage: limit)
         }
-        return false
+    }
+
+    private func runHelperCommand(_ args: [String]) -> Bool {
+        if getuid() == 0 {
+            return executeDirect(command: args[0], value: args.count > 1 ? Int(args[1]) : nil)
+        }
+
+        let helperPath = "/Library/PrivilegedHelperTools/com.voltcontrol.helper"
+        guard FileManager.default.isExecutableFile(atPath: helperPath) else {
+            return false
+        }
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: helperPath)
+        proc.arguments = args
+        proc.standardOutput = Pipe()
+        proc.standardError = Pipe()
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+            return proc.terminationStatus == 0
+        } catch {
+            return false
+        }
+    }
+
+    private func executeDirect(command: String, value: Int?) -> Bool {
+        switch command {
+        case "pause", "inhibit":
+            let okB0CM = writeBytes(key: "B0CM", bytes: [0])
+            _ = writeBytes(key: "CHIE", bytes: [0x00])
+            let okCH0B = writeBytes(key: "CH0B", bytes: [0x02])
+            _ = writeBytes(key: "CH0C", bytes: [0x02])
+            return okB0CM || okCH0B
+        case "discharge":
+            _ = writeBytes(key: "B0CM", bytes: [0])
+            let okCHIE = writeBytes(key: "CHIE", bytes: [0x01])
+            let okCH0I = writeBytes(key: "CH0I", bytes: [0x01])
+            _ = writeBytes(key: "CH0J", bytes: [0x01])
+            return okCHIE || okCH0I
+        case "limit":
+            let val = UInt8(clamping: value ?? 80)
+            let okB0CM = writeBytes(key: "B0CM", bytes: [val])
+            let okBCLM = writeBytes(key: "BCLM", bytes: [val])
+            _ = writeBytes(key: "CHIE", bytes: [0x00])
+            let okCH0B = writeBytes(key: "CH0B", bytes: [0x00])
+            _ = writeBytes(key: "CH0C", bytes: [0x00])
+            return okB0CM || okBCLM || okCH0B
+        case "enable", "resume", "topup":
+            let okB0CM = writeBytes(key: "B0CM", bytes: [100])
+            let okBCLM = writeBytes(key: "BCLM", bytes: [100])
+            _ = writeBytes(key: "CHIE", bytes: [0x00])
+            let okCH0B = writeBytes(key: "CH0B", bytes: [0x00])
+            _ = writeBytes(key: "CH0C", bytes: [0x00])
+            return okB0CM || okBCLM || okCH0B
+        default:
+            return false
+        }
     }
 }

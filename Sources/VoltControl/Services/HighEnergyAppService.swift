@@ -66,9 +66,24 @@ public final class HighEnergyAppService {
     public private(set) var appIcons: [String: NSImage] = [:]
 
     private var timer: Timer?
+    public private(set) var isMenuVisible: Bool = false
 
     private init() {
-        start()
+        // Initial snapshot for instant availability on first menu open
+        refresh()
+    }
+
+    public func setMenuVisible(_ visible: Bool) {
+        guard self.isMenuVisible != visible else { return }
+        self.isMenuVisible = visible
+        if visible {
+            refresh()
+            scheduleTimer()
+        } else {
+            // Stop high-frequency polling when the menu is closed to save battery & CPU
+            timer?.invalidate()
+            timer = nil
+        }
     }
 
     public func start() {
@@ -77,11 +92,13 @@ public final class HighEnergyAppService {
     }
 
     public func scheduleTimer() {
+        guard isMenuVisible else { return }
         timer?.invalidate()
         let interval = max(2.0, AppSettings.shared.processScanIntervalSeconds)
         let newTimer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.refresh()
+                guard let self = self, self.isMenuVisible else { return }
+                self.refresh()
             }
         }
         RunLoop.main.add(newTimer, forMode: .common)
