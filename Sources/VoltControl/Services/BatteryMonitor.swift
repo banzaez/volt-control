@@ -17,6 +17,8 @@ public final class BatteryMonitor {
     private var lastNotifiedLowBattery: Bool = false
     private var lastNotifiedOverheatTime: Date?
     private var lastDisconnectDate: Date? = Date().addingTimeInterval(-7800)
+    private var lastSystemLimitCheck: Date = .distantPast
+    private var cachedSystemLimit: Int? = nil
     private let settings = AppSettings.shared
     private let smc = SMCController.shared
     private let notifications = NotificationService.shared
@@ -332,7 +334,7 @@ public final class BatteryMonitor {
         newInfo.remainingCapacityMah = remCap
         newInfo.timeRemainingMinutes = timeRemaining
         newInfo.isTopUpActive = settings.isTopUpActive
-        newInfo.chargeLimit = settings.chargeLimit
+        newInfo.chargeLimit = getSystemChargeLimit() ?? settings.chargeLimit
 
         if isAC {
             lastDisconnectDate = nil
@@ -476,5 +478,40 @@ public final class BatteryMonitor {
             _ = smc.setHardwareChargeLimit(percentage: settings.chargeLimit)
         }
         fetchSnapshot()
+    }
+
+    // MARK: - Native macOS 15+ System Charge Limit Detection
+    private func getSystemChargeLimit() -> Int? {
+        let now = Date()
+        if now.timeIntervalSince(lastSystemLimitCheck) < 30.0 {
+            return cachedSystemLimit
+        }
+        lastSystemLimitCheck = now
+        cachedSystemLimit = readSystemChargeLimit()
+        return cachedSystemLimit
+    }
+
+    private func readSystemChargeLimit() -> Int? {
+        let pipe = Pipe()
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
+        proc.arguments = ["-g", "battlimit"]
+        proc.standardOutput = pipe
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let str = String(data: data, encoding: .utf8) else { return nil }
+            let pattern = "chargeSocLimitSoc\\s*=\\s*(\\d+);"
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: str, range: NSRange(str.startIndex..., in: str)),
+               let r = Range(match.range(at: 1), in: str),
+               let limit = Int(str[r]), limit >= 50 && limit <= 100 {
+                return limit
+            }
+        } catch {
+            return nil
+        }
+        return nil
     }
 }
