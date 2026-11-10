@@ -1,11 +1,46 @@
 import AppKit
 import Foundation
+import SwiftUI
+
+public enum EnergyImpactLevel: String, Sendable {
+    case veryHigh = "Очень высокий"
+    case high = "Высокий"
+    case moderate = "Умеренный"
+    case low = "Низкий"
+
+    public var badgeColor: Color {
+        switch self {
+        case .veryHigh: return .red
+        case .high: return .orange
+        case .moderate: return .yellow
+        case .low: return .secondary
+        }
+    }
+
+    public var iconName: String {
+        switch self {
+        case .veryHigh: return "bolt.trianglebadge.exclamationmark.fill"
+        case .high: return "gauge.with.dots.needle.67percent"
+        case .moderate: return "gauge.with.dots.needle.33percent"
+        case .low: return "gauge.with.dots.needle.0percent"
+        }
+    }
+}
 
 public struct HighEnergyApp: Identifiable, Sendable {
-    public var id: String { name }
+    public let id: String
     public let name: String
-    public let energyLevel: String
+    public let impact: EnergyImpactLevel
     public let cpuUsage: Double
+    public let isPlaceholder: Bool
+
+    public init(id: String? = nil, name: String, impact: EnergyImpactLevel, cpuUsage: Double, isPlaceholder: Bool = false) {
+        self.id = id ?? name
+        self.name = name
+        self.impact = impact
+        self.cpuUsage = cpuUsage
+        self.isPlaceholder = isPlaceholder
+    }
 }
 
 @MainActor
@@ -13,7 +48,14 @@ public struct HighEnergyApp: Identifiable, Sendable {
 public final class HighEnergyAppService {
     public static let shared = HighEnergyAppService()
 
-    public private(set) var apps: [HighEnergyApp] = []
+    /// Always contains exactly 4 items so the menu layout never jumps
+    public private(set) var topFourSlots: [HighEnergyApp] = [
+        HighEnergyApp(id: "slot-0", name: "Анализ процессов...", impact: .low, cpuUsage: 0, isPlaceholder: true),
+        HighEnergyApp(id: "slot-1", name: "—", impact: .low, cpuUsage: 0, isPlaceholder: true),
+        HighEnergyApp(id: "slot-2", name: "—", impact: .low, cpuUsage: 0, isPlaceholder: true),
+        HighEnergyApp(id: "slot-3", name: "—", impact: .low, cpuUsage: 0, isPlaceholder: true)
+    ]
+
     public private(set) var appIcons: [String: NSImage] = [:]
 
     private var timer: Timer?
@@ -24,7 +66,13 @@ public final class HighEnergyAppService {
 
     public func start() {
         refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        scheduleTimer()
+    }
+
+    public func scheduleTimer() {
+        timer?.invalidate()
+        let interval = max(2.0, AppSettings.shared.processScanIntervalSeconds)
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.refresh()
             }
@@ -32,7 +80,11 @@ public final class HighEnergyAppService {
     }
 
     public func refresh() {
-        // Run ps in background thread to avoid blocking UI
+        let highThreshold = AppSettings.shared.highEnergyThresholdCPU
+        let veryHighThreshold = max(highThreshold + 2.0, AppSettings.shared.veryHighEnergyThresholdCPU)
+        let includeSystem = AppSettings.shared.includeSystemProcesses
+        let ignoredSet = AppSettings.shared.parsedIgnoredApps()
+
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let pipe = Pipe()
             let proc = Process()
@@ -53,51 +105,91 @@ public final class HighEnergyAppService {
             for line in output.components(separatedBy: "\n").dropFirst() {
                 let parts = line.trimmingCharacters(in: .whitespaces).split(separator: " ", maxSplits: 1)
                 if parts.count == 2, let cpu = Double(parts[0]) {
-                    let comm = String(parts[1])
-                    cpuMap[comm, default: 0.0] += cpu
+                    let comm = String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !comm.isEmpty {
+                        cpuMap[comm, default: 0.0] += cpu
+                    }
                 }
             }
 
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
-                let runningApps = NSWorkspace.shared.runningApplications.filter {
-                    $0.activationPolicy == .regular && $0.bundleIdentifier != Bundle.main.bundleIdentifier
+                let runningApps = NSWorkspace.shared.runningApplications.filter { app in
+                    guard app.bundleIdentifier != Bundle.main.bundleIdentifier else { return false }
+                    if includeSystem {
+                        return app.activationPolicy == .regular || app.activationPolicy == .accessory
+                    } else {
+                        return app.activationPolicy == .regular
+                    }
                 }
 
                 var detected: [HighEnergyApp] = []
                 var icons: [String: NSImage] = [:]
+                var matchedNames: Set<String> = []
 
                 for app in runningApps {
                     guard let name = app.localizedName, !name.isEmpty else { continue }
+                    if ignoredSet.contains(name.lowercased()) { continue }
+                    guard !matchedNames.contains(name) else { continue }
+                    matchedNames.insert(name)
+
                     let bundleName = app.bundleURL?.lastPathComponent.replacingOccurrences(of: ".app", with: "") ?? name
 
-                    // Match CPU usage
-                    var total = (cpuMap[name] ?? 0.0) + (cpuMap[bundleName] ?? 0.0)
-                    for (k, v) in cpuMap where k.contains(name) || name.contains(k) {
-                        if k != name && k != bundleName {
+                    var total = (cpuMap[name] ?? 0.0)
+                    if bundleName != name {
+                        total += (cpuMap[bundleName] ?? 0.0)
+                    }
+                    for (k, v) in cpuMap where k != name && k != bundleName {
+                        if k.hasPrefix(name) || k.hasPrefix(bundleName) {
                             total += v
                         }
                     }
 
-                    if total >= 3.0 {
-                        let level: String
-                        if total >= 20.0 {
-                            level = "Очень высокий"
-                        } else if total >= 10.0 {
-                            level = "Высокий"
-                        } else {
-                            level = "Умеренный"
-                        }
-                        detected.append(HighEnergyApp(name: name, energyLevel: level, cpuUsage: total))
-                        if let icon = app.icon {
-                            icons[name] = icon
+                    let impact: EnergyImpactLevel
+                    if total >= veryHighThreshold {
+                        impact = .veryHigh
+                    } else if total >= highThreshold {
+                        impact = .high
+                    } else if total >= max(1.0, highThreshold * 0.4) {
+                        impact = .moderate
+                    } else {
+                        impact = .low
+                    }
+
+                    detected.append(HighEnergyApp(name: name, impact: impact, cpuUsage: total))
+                    if let icon = app.icon {
+                        icons[name] = icon
+                    }
+                }
+
+                // If system processes are enabled, also include top raw processes like WindowServer
+                if includeSystem {
+                    let sysCandidates = ["WindowServer", "kernel_task", "mds_stores", "cloudd", "coreaudiod"]
+                    for sysName in sysCandidates where !ignoredSet.contains(sysName.lowercased()) {
+                        if let cpu = cpuMap[sysName], cpu >= highThreshold * 0.5 {
+                            let impact: EnergyImpactLevel = cpu >= veryHighThreshold ? .veryHigh : (cpu >= highThreshold ? .high : .moderate)
+                            detected.append(HighEnergyApp(name: sysName, impact: impact, cpuUsage: cpu))
                         }
                     }
                 }
 
-                // Sort by CPU descending
                 detected.sort { $0.cpuUsage > $1.cpuUsage }
-                self.apps = Array(detected.prefix(3))
+
+                var slots: [HighEnergyApp] = Array(detected.prefix(4))
+                while slots.count < 4 {
+                    let idx = slots.count
+                    slots.append(
+                        HighEnergyApp(
+                            id: "empty-slot-\(idx)",
+                            name: "Нет высокой нагрузки",
+                            impact: .low,
+                            cpuUsage: 0.0,
+                            isPlaceholder: true
+                        )
+                    )
+                }
+
+                self.topFourSlots = slots
                 self.appIcons = icons
             }
         }

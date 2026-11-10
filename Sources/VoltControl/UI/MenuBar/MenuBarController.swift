@@ -16,6 +16,16 @@ public final class MenuBarController: NSObject {
 
     @MainActor
     public func setup() {
+        // Render and assign custom macOS 27 Glass App Icon to NSApp
+        let iconHosting = NSHostingView(rootView: AppIconView(size: 256))
+        iconHosting.frame = NSRect(x: 0, y: 0, width: 256, height: 256)
+        if let bitmapRep = iconHosting.bitmapImageRepForCachingDisplay(in: iconHosting.bounds) {
+            iconHosting.cacheDisplay(in: iconHosting.bounds, to: bitmapRep)
+            let appIcon = NSImage(size: NSSize(width: 256, height: 256))
+            appIcon.addRepresentation(bitmapRep)
+            NSApp.applicationIconImage = appIcon
+        }
+
         // Create NSStatusItem
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
@@ -29,7 +39,6 @@ public final class MenuBarController: NSObject {
         let pop = NSPopover()
         pop.behavior = .transient
         pop.animates = true
-        pop.contentSize = NSSize(width: 275, height: 340)
 
         let popoverView = MainPopoverView(
             onOpenSettings: { [weak self] in
@@ -39,7 +48,9 @@ public final class MenuBarController: NSObject {
                 NSApplication.shared.terminate(nil)
             }
         )
-        pop.contentViewController = NSHostingController(rootView: popoverView)
+        let hostingController = NSHostingController(rootView: popoverView)
+        hostingController.sizingOptions = [.preferredContentSize]
+        pop.contentViewController = hostingController
         self.popover = pop
 
         // Update menu bar appearance periodically
@@ -56,20 +67,21 @@ public final class MenuBarController: NSObject {
         guard let button = statusItem?.button else { return }
 
         let info = BatteryMonitor.shared.info
-        let mode = AppSettings.shared.menuBarDisplayMode
-        let (icon, title) = MenuBarIconRenderer.renderIcon(info: info, mode: mode)
+        let settings = AppSettings.shared
+        let (icon, title) = MenuBarIconRenderer.renderIcon(info: info, settings: settings)
 
         button.image = icon
         button.imagePosition = title.isEmpty ? .imageOnly : .imageLeading
         button.title = title
 
-        // Monospaced numbers for smooth non-jumping layout
         if !title.isEmpty {
-            let font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+            let font = NSFont.monospacedDigitSystemFont(ofSize: 11.5, weight: .medium)
             button.attributedTitle = NSAttributedString(
-                string: title,
+                string: " " + title,
                 attributes: [.font: font]
             )
+        } else {
+            button.attributedTitle = NSAttributedString(string: "")
         }
     }
 
@@ -79,8 +91,8 @@ public final class MenuBarController: NSObject {
         if popover.isShown {
             popover.performClose(sender)
         } else {
-            // Trigger fresh reading on click
             BatteryMonitor.shared.fetchSnapshot()
+            HighEnergyAppService.shared.refresh()
             popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }
@@ -95,12 +107,14 @@ public final class MenuBarController: NSObject {
             let hostingController = NSHostingController(rootView: settingsView)
 
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 480, height: 420),
-                styleMask: [.titled, .closable, .miniaturizable],
+                contentRect: NSRect(x: 0, y: 0, width: 680, height: 650),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                 backing: .buffered,
                 defer: false
             )
             window.title = "ВольтКонтроль — Настройки"
+            window.titlebarAppearsTransparent = true
+            window.minSize = NSSize(width: 640, height: 540)
             window.contentViewController = hostingController
             window.isReleasedWhenClosed = false
             window.center()
