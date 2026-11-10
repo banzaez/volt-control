@@ -431,7 +431,7 @@ public struct SettingsView: View {
                 GlassToggleRow(
                     icon: "gearshape.2.fill",
                     title: "Учитывать системные фоновые демоны",
-                    subtitle: "Включать в список Топ-4 процессы вроде WindowServer, kernel_task и mds_stores",
+                    subtitle: "Включать в список Топ-3 процессы вроде WindowServer, kernel_task и mds_stores",
                     isOn: Binding(
                         get: { settings.includeSystemProcesses },
                         set: {
@@ -478,6 +478,41 @@ public struct SettingsView: View {
             }
             .glassCard()
 
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Отображение уровней расхода в меню")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+
+                GlassToggleRow(
+                    icon: "gauge.with.dots.needle.33percent",
+                    title: "Отображать «Умеренный расход»",
+                    subtitle: "Показывать приложения со средней нагрузкой CPU (от \(String(format: "%.0f%%", max(1.0, settings.highEnergyThresholdCPU * 0.4))))",
+                    isOn: Binding(
+                        get: { settings.showModerateEnergyApps },
+                        set: {
+                            settings.showModerateEnergyApps = $0
+                            energyService.refresh()
+                        }
+                    )
+                )
+
+                Divider().opacity(0.35)
+
+                GlassToggleRow(
+                    icon: "gauge.with.dots.needle.0percent",
+                    title: "Отображать «Низкий расход»",
+                    subtitle: "Включать приложения с фоновой или минимальной нагрузкой",
+                    isOn: Binding(
+                        get: { settings.showLowEnergyApps },
+                        set: {
+                            settings.showLowEnergyApps = $0
+                            energyService.refresh()
+                        }
+                    )
+                )
+            }
+            .glassCard()
+
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Исключенные приложения (через запятую)")
@@ -489,7 +524,7 @@ public struct SettingsView: View {
                     .controlSize(.small)
                 }
 
-                Text("Указанные приложения не будут включаться в список Топ-4 энергоемких.")
+                Text("Указанные приложения не будут включаться в список Топ-3 энергоемких.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
 
@@ -569,8 +604,8 @@ public struct SettingsView: View {
 
                 GlassToggleRow(
                     icon: "app.badge.fill",
-                    title: "Блок «Приложения с высоким энергопотреблением» (Топ 4)",
-                    subtitle: "Фиксированная область на 4 приложения без изменения высоты меню",
+                    title: "Блок «Приложения с высоким энергопотреблением» (Топ 3)",
+                    subtitle: "Фиксированная область на 3 приложения без изменения высоты меню",
                     isOn: $settings.menuShowHighEnergyApps
                 )
             }

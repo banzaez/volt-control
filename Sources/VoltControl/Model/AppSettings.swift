@@ -158,6 +158,18 @@ public final class AppSettings {
         }
     }
 
+    public var showModerateEnergyApps: Bool {
+        didSet {
+            UserDefaults.standard.set(showModerateEnergyApps, forKey: "showModerateEnergyApps")
+        }
+    }
+
+    public var showLowEnergyApps: Bool {
+        didSet {
+            UserDefaults.standard.set(showLowEnergyApps, forKey: "showLowEnergyApps")
+        }
+    }
+
     // MARK: - 4. Меню (Menu Customization)
     public var menuShowTimeRemaining: Bool {
         didSet {
@@ -273,6 +285,8 @@ public final class AppSettings {
         self.showCPUPercentageInMenu = d.object(forKey: "showCPUPercentageInMenu") != nil ? d.bool(forKey: "showCPUPercentageInMenu") : true
         self.processScanIntervalSeconds = d.object(forKey: "processScanIntervalSeconds") != nil ? d.double(forKey: "processScanIntervalSeconds") : 5.0
         self.ignoredAppNames = d.string(forKey: "ignoredAppNames") ?? "Finder, Dock"
+        self.showModerateEnergyApps = d.object(forKey: "showModerateEnergyApps") != nil ? d.bool(forKey: "showModerateEnergyApps") : true
+        self.showLowEnergyApps = d.object(forKey: "showLowEnergyApps") != nil ? d.bool(forKey: "showLowEnergyApps") : false
 
         self.menuShowTimeRemaining = d.object(forKey: "menuShowTimeRemaining") != nil ? d.bool(forKey: "menuShowTimeRemaining") : true
         self.menuShowElapsedTime = d.object(forKey: "menuShowElapsedTime") != nil ? d.bool(forKey: "menuShowElapsedTime") : true

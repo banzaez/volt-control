@@ -28,7 +28,7 @@ public struct MainPopoverView: View {
                 menuDivider
             }
 
-            // MARK: - 3. Приложения с высоким энергопотреблением (фиксировано 4 слота)
+            // MARK: - 3. Приложения с высоким энергопотреблением (фиксировано 3 слота)
             if settings.menuShowHighEnergyApps {
                 highEnergyAppsSection
                     .padding(.horizontal, 14)
@@ -271,7 +271,7 @@ public struct MainPopoverView: View {
         }
     }
 
-    // MARK: - 3. Fixed 4-App Section (Приложения с высоким энергопотреблением)
+    // MARK: - 3. Fixed 3-App Section (Приложения с высоким энергопотреблением)
     private var highEnergyAppsSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Приложения с высоким\nэнергопотреблением")
@@ -279,13 +279,51 @@ public struct MainPopoverView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            VStack(spacing: 2) {
-                ForEach(Array(energyService.topFourSlots.prefix(4).enumerated()), id: \.offset) { _, app in
-                    fixedAppRow(app: app)
-                        .frame(height: 24)
+            Group {
+                if energyService.hasRealApps {
+                    VStack(spacing: 2) {
+                        ForEach(Array(energyService.topThreeSlots.prefix(3).enumerated()), id: \.offset) { _, app in
+                            fixedAppRow(app: app)
+                                .frame(height: 24)
+                        }
+                    }
+                } else {
+                    HStack(spacing: 10) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.blue.opacity(0.12))
+                                .frame(width: 28, height: 28)
+
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Color.blue)
+                        }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Нет энергоёмких приложений")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.primary)
+
+                            Text("Нагрузка всех процессов в норме")
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(Color.primary.opacity(0.035))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                    )
                 }
             }
-            .frame(height: 24 * 4 + 2 * 3) // Фиксированная высота 102pt — меню не прыгает
+            .frame(height: 24 * 3 + 2 * 2) // Фиксированная высота 76pt (ровно на 3 слота) — меню не прыгает
         }
     }
 

@@ -66,5 +66,14 @@ struct VoltControlTests {
         #expect(settings.chargeLimit >= 50 && settings.chargeLimit <= 100)
         #expect(settings.autoResetTopUp == true)
         #expect(settings.sailingDelta >= 2)
+        #expect(settings.showModerateEnergyApps == true)
+        #expect(settings.showLowEnergyApps == false)
+    }
+
+    @Test("High Energy Service Fixed 3 Slots")
+    @MainActor
+    func testHighEnergyAppSlots() {
+        let service = HighEnergyAppService.shared
+        #expect(service.topThreeSlots.count == 3)
     }
 }
