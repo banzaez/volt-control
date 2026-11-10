@@ -4,8 +4,9 @@ import SwiftUI
 @MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     public func applicationDidFinishLaunching(_ notification: Notification) {
-        // Run as menu bar accessory without dock icon
+        // Run as menu bar accessory by default (switches to .regular with Dock icon when Settings window is open)
         NSApp.setActivationPolicy(.accessory)
+        NSApp.applicationIconImage = AppIconGenerator.makeImage(size: 512)
 
         // Request user notification permissions
         NotificationService.shared.requestAuthorization()

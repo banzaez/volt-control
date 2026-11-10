@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 @MainActor
-public final class MenuBarController: NSObject {
+public final class MenuBarController: NSObject, NSWindowDelegate {
     public static let shared = MenuBarController()
 
     private var statusItem: NSStatusItem?
@@ -17,8 +17,7 @@ public final class MenuBarController: NSObject {
     @MainActor
     public func setup() {
         // Assign the Blue Side-View Lego Brick App Icon to NSApp
-        let appIcon = AppIconGenerator.makeImage(size: 512)
-        NSApp.applicationIconImage = appIcon
+        NSApp.applicationIconImage = AppIconGenerator.makeImage(size: 512)
 
         // Create NSStatusItem
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -105,6 +104,10 @@ public final class MenuBarController: NSObject {
     public func openSettings() {
         popover?.performClose(nil)
 
+        // Show app icon in Dock & Cmd+Tab while Settings window is open
+        NSApp.setActivationPolicy(.regular)
+        NSApp.applicationIconImage = AppIconGenerator.makeImage(size: 512)
+
         if settingsWindow == nil {
             let settingsView = SettingsView()
             let hostingController = NSHostingController(rootView: settingsView)
@@ -116,14 +119,21 @@ public final class MenuBarController: NSObject {
                 defer: false
             )
             window.title = "VoltControl — Настройки"
-            window.minSize = NSSize(width: 660, height: 520)
+            window.minSize = NSSize(width: 680, height: 520)
             window.contentViewController = hostingController
             window.isReleasedWhenClosed = false
+            window.delegate = self
             window.center()
             self.settingsWindow = window
         }
 
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    public func windowWillClose(_ notification: Notification) {
+        if let closedWin = notification.object as? NSWindow, closedWin == settingsWindow {
+            NSApp.setActivationPolicy(.accessory)
+        }
     }
 }

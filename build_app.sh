@@ -210,17 +210,8 @@ cat << 'EOF' > "${CONTENTS_DIR}/Info.plist"
 EOF
 
 echo "🔏 Подписание приложения ad-hoc подписью..."
+xattr -cr "${APP_BUNDLE}" 2>/dev/null || true
 codesign --force --deep --sign - "${APP_BUNDLE}"
-
-echo "🖼 Применение иконки к бандлу для мгновенного отображения в Finder..."
-swift -e '
-import AppKit
-let appPath = CommandLine.arguments[1]
-let icnsPath = appPath + "/Contents/Resources/AppIcon.icns"
-if let image = NSImage(contentsOfFile: icnsPath) {
-    NSWorkspace.shared.setIcon(image, forFile: appPath, options: [])
-}
-' "$(pwd)/${APP_BUNDLE}"
 
 touch "${APP_BUNDLE}"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$(pwd)/${APP_BUNDLE}" >/dev/null 2>&1 || true
