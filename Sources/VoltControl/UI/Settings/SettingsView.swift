@@ -997,7 +997,7 @@ public struct SettingsView: View {
             VStack(spacing: 3) {
                 Text("VoltControl")
                     .font(.system(size: 18, weight: .semibold))
-                Text("Версия 2.1")
+                Text("Версия 1.0.0")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
