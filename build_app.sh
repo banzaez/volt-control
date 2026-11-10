@@ -18,7 +18,7 @@ mkdir -p "${RESOURCES_DIR}"
 
 cp "${BUILD_DIR}/${APP_NAME}" "${MACOS_DIR}/${APP_NAME}"
 
-echo "🎨 Генерация минималистичной иконки AppIcon.icns..."
+echo "🎨 Генерация иконки синего кубика LEGO сбоку (AppIcon.icns)..."
 ICONSET_DIR=$(mktemp -d)/AppIcon.iconset
 mkdir -p "${ICONSET_DIR}"
 
@@ -42,50 +42,120 @@ let rep = NSBitmapImageRep(
 NSGraphicsContext.saveGraphicsState()
 NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
 
-let rect = NSRect(x: 64, y: 64, width: 896, height: 896)
-let squircle = NSBezierPath(roundedRect: rect, xRadius: 205, yRadius: 205)
+let rect = NSRect(x: 0, y: 0, width: size, height: size)
+let s = size
+let inset = s * 0.0625
+let bgRect = NSRect(x: inset, y: inset, width: s - inset * 2, height: s - inset * 2)
+let cornerRadius = bgRect.width * 0.225
 
-// Minimalist Graphite Gradient
+// 1. Squircle Background (Deep Navy-Slate with subtle blue ambient glow)
+let squircle = NSBezierPath(roundedRect: bgRect, xRadius: cornerRadius, yRadius: cornerRadius)
 let bgGradient = NSGradient(colors: [
-    NSColor(calibratedWhite: 0.22, alpha: 1.0),
-    NSColor(calibratedWhite: 0.11, alpha: 1.0)
+    NSColor(calibratedRed: 0.11, green: 0.16, blue: 0.26, alpha: 1.0),
+    NSColor(calibratedRed: 0.06, green: 0.09, blue: 0.15, alpha: 1.0)
 ])!
 bgGradient.draw(in: squircle, angle: -90)
 
-// Subtle Rim
-squircle.lineWidth = 14
-NSColor(calibratedWhite: 1.0, alpha: 0.25).setStroke()
+squircle.lineWidth = s * 0.014
+NSColor(calibratedRed: 0.25, green: 0.55, blue: 1.0, alpha: 0.35).setStroke()
 squircle.stroke()
 
-// Minimalist Battery Outline
-let battRect = NSRect(x: 235, y: 342, width: 510, height: 340)
-let battPath = NSBezierPath(roundedRect: battRect, xRadius: 92, yRadius: 92)
-NSColor(calibratedWhite: 1.0, alpha: 0.08).setFill()
-battPath.fill()
-battPath.lineWidth = 24
-NSColor(calibratedWhite: 1.0, alpha: 0.88).setStroke()
-battPath.stroke()
+// 2. Blue Lego Brick (Side Profile View)
+let bodyWidth = s * 0.62
+let bodyHeight = s * 0.32
+let bodyX = rect.midX - bodyWidth / 2.0
+let bodyY = rect.midY - bodyHeight / 2.0 - s * 0.04
 
-// Positive Terminal Cap
-let capRect = NSRect(x: 770, y: 448, width: 38, height: 128)
-let capPath = NSBezierPath(roundedRect: capRect, xRadius: 18, yRadius: 18)
-NSColor(calibratedWhite: 1.0, alpha: 0.78).setFill()
-capPath.fill()
+// Drop shadow under brick
+let shadowRect = NSRect(x: bodyX + s * 0.02, y: bodyY - s * 0.035, width: bodyWidth - s * 0.04, height: s * 0.06)
+let shadowPath = NSBezierPath(ovalIn: shadowRect)
+NSColor(calibratedWhite: 0.0, alpha: 0.45).setFill()
+shadowPath.fill()
 
-// Center Bolt Symbol
-if let symbol = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: nil) {
-    let config = NSImage.SymbolConfiguration(pointSize: 230, weight: .bold)
-    if let configured = symbol.withSymbolConfiguration(config) {
-        let symSize = configured.size
-        let symRect = NSRect(
-            x: 490 - symSize.width / 2,
-            y: 512 - symSize.height / 2,
-            width: symSize.width,
-            height: symSize.height
-        )
-        configured.draw(in: symRect)
-    }
+// Bottom Lego interlock lip (recessed base seen from the side)
+let lipWidth = bodyWidth * 0.86
+let lipHeight = s * 0.032
+let lipRect = NSRect(
+    x: rect.midX - lipWidth / 2.0,
+    y: bodyY - lipHeight * 0.65,
+    width: lipWidth,
+    height: lipHeight
+)
+let lipPath = NSBezierPath(roundedRect: lipRect, xRadius: s * 0.012, yRadius: s * 0.012)
+NSColor(calibratedRed: 0.02, green: 0.28, blue: 0.68, alpha: 1.0).setFill()
+lipPath.fill()
+
+// Two Lego Studs on top (side view of a 2-stud brick)
+let studWidth = bodyWidth * 0.31
+let studHeight = s * 0.095
+let studSpacing = bodyWidth * 0.14
+let leftStudX = rect.midX - studSpacing / 2.0 - studWidth
+let rightStudX = rect.midX + studSpacing / 2.0
+let studY = bodyY + bodyHeight - s * 0.012
+let studRadius = s * 0.024
+
+let studGradient = NSGradient(colors: [
+    NSColor(calibratedRed: 0.18, green: 0.62, blue: 1.00, alpha: 1.0),
+    NSColor(calibratedRed: 0.04, green: 0.45, blue: 0.92, alpha: 1.0)
+])!
+
+for studX in [leftStudX, rightStudX] {
+    let studRect = NSRect(x: studX, y: studY, width: studWidth, height: studHeight)
+    let studPath = NSBezierPath(roundedRect: studRect, xRadius: studRadius, yRadius: studRadius)
+    studGradient.draw(in: studPath, angle: 0)
+
+    let studHighlightRect = NSRect(
+        x: studRect.minX + studWidth * 0.08,
+        y: studRect.maxY - studHeight * 0.26,
+        width: studWidth * 0.84,
+        height: studHeight * 0.16
+    )
+    let studHighlight = NSBezierPath(roundedRect: studHighlightRect, xRadius: studRadius * 0.5, yRadius: studRadius * 0.5)
+    NSColor(calibratedWhite: 1.0, alpha: 0.35).setFill()
+    studHighlight.fill()
+
+    studPath.lineWidth = s * 0.01
+    NSColor(calibratedWhite: 1.0, alpha: 0.25).setStroke()
+    studPath.stroke()
 }
+
+// Main Brick Body (Side View)
+let bodyRect = NSRect(x: bodyX, y: bodyY, width: bodyWidth, height: bodyHeight)
+let bodyRadius = s * 0.038
+let bodyPath = NSBezierPath(roundedRect: bodyRect, xRadius: bodyRadius, yRadius: bodyRadius)
+
+let bodyGradient = NSGradient(colors: [
+    NSColor(calibratedRed: 0.14, green: 0.58, blue: 1.00, alpha: 1.0),
+    NSColor(calibratedRed: 0.03, green: 0.42, blue: 0.90, alpha: 1.0),
+    NSColor(calibratedRed: 0.01, green: 0.32, blue: 0.76, alpha: 1.0)
+])!
+bodyGradient.draw(in: bodyPath, angle: -90)
+
+// Top bevel highlight along brick body
+let topBevelRect = NSRect(
+    x: bodyRect.minX + s * 0.025,
+    y: bodyRect.maxY - s * 0.032,
+    width: bodyRect.width - s * 0.05,
+    height: s * 0.018
+)
+let topBevelPath = NSBezierPath(roundedRect: topBevelRect, xRadius: s * 0.009, yRadius: s * 0.009)
+NSColor(calibratedWhite: 1.0, alpha: 0.38).setFill()
+topBevelPath.fill()
+
+// Bottom inner shadow line on brick body
+let bottomShadeRect = NSRect(
+    x: bodyRect.minX + s * 0.02,
+    y: bodyRect.minY + s * 0.012,
+    width: bodyRect.width - s * 0.04,
+    height: s * 0.02
+)
+let bottomShadePath = NSBezierPath(roundedRect: bottomShadeRect, xRadius: s * 0.008, yRadius: s * 0.008)
+NSColor(calibratedWhite: 0.0, alpha: 0.22).setFill()
+bottomShadePath.fill()
+
+bodyPath.lineWidth = s * 0.012
+NSColor(calibratedWhite: 1.0, alpha: 0.28).setStroke()
+bodyPath.stroke()
 
 NSGraphicsContext.restoreGraphicsState()
 
@@ -113,6 +183,8 @@ cat << 'EOF' > "${CONTENTS_DIR}/Info.plist"
     <string>VoltControl</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.voltcontrol.app</string>
     <key>CFBundleInfoDictionaryVersion</key>
@@ -124,9 +196,9 @@ cat << 'EOF' > "${CONTENTS_DIR}/Info.plist"
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>2.0.0</string>
+    <string>2.1.0</string>
     <key>CFBundleVersion</key>
-    <string>2</string>
+    <string>3</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>LSUIElement</key>
@@ -139,5 +211,18 @@ EOF
 
 echo "🔏 Подписание приложения ad-hoc подписью..."
 codesign --force --deep --sign - "${APP_BUNDLE}"
+
+echo "🖼 Применение иконки к бандлу для мгновенного отображения в Finder..."
+swift -e '
+import AppKit
+let appPath = CommandLine.arguments[1]
+let icnsPath = appPath + "/Contents/Resources/AppIcon.icns"
+if let image = NSImage(contentsOfFile: icnsPath) {
+    NSWorkspace.shared.setIcon(image, forFile: appPath, options: [])
+}
+' "$(pwd)/${APP_BUNDLE}"
+
+touch "${APP_BUNDLE}"
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$(pwd)/${APP_BUNDLE}" >/dev/null 2>&1 || true
 
 echo "✅ Приложение успешно собрано: ${APP_BUNDLE}"

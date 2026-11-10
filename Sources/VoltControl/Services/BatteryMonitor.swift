@@ -1,5 +1,6 @@
 import Foundation
 import IOKit
+import IOKit.ps
 import SwiftUI
 
 @MainActor
@@ -11,7 +12,9 @@ public final class BatteryMonitor {
     public private(set) var isMonitoring: Bool = false
 
     private var timer: Timer?
+    private var powerSourceRunLoopSource: CFRunLoopSource?
     private var lastNotifiedLevel: Int?
+    private var lastNotifiedLowBattery: Bool = false
     private var lastNotifiedOverheatTime: Date?
     private var lastDisconnectDate: Date? = Date().addingTimeInterval(-7800)
     private let settings = AppSettings.shared
@@ -25,21 +28,55 @@ public final class BatteryMonitor {
     public func startMonitoring() {
         guard !isMonitoring else { return }
         isMonitoring = true
+        registerPowerSourceNotifications()
         fetchSnapshot()
+        rescheduleTimer()
+    }
 
-        DispatchQueue.main.async { [weak self] in
-            self?.timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.fetchSnapshot()
-                }
+    public func rescheduleTimer() {
+        timer?.invalidate()
+        let interval = max(1.0, settings.pollingIntervalSeconds)
+        let newTimer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.fetchSnapshot()
             }
         }
+        RunLoop.main.add(newTimer, forMode: .common)
+        self.timer = newTimer
     }
 
     public func stopMonitoring() {
         isMonitoring = false
         timer?.invalidate()
         timer = nil
+        if let src = powerSourceRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes)
+            powerSourceRunLoopSource = nil
+        }
+    }
+
+    private func registerPowerSourceNotifications() {
+        guard powerSourceRunLoopSource == nil else { return }
+        let callback: IOPowerSourceCallbackType = { _ in
+            Task { @MainActor in
+                BatteryMonitor.shared.fetchSnapshot()
+            }
+        }
+        if let source = IOPSNotificationCreateRunLoopSource(callback, nil)?.takeRetainedValue() {
+            CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+            self.powerSourceRunLoopSource = source
+        }
+    }
+
+    /// Safely converts an IOKit CFNumber (which may store negative values as 64-bit unsigned two's complement) into signed Int64
+    private nonisolated func signedInt64(_ anyVal: Any?) -> Int64 {
+        guard let num = anyVal as? NSNumber else { return 0 }
+        return Int64(bitPattern: num.uint64Value)
+    }
+
+    /// Converts signed milliwatts from IOKit dictionary entry to Watts
+    private nonisolated func signedMilliwattsToWatts(_ anyVal: Any?) -> Double {
+        Double(signedInt64(anyVal)) / 1000.0
     }
 
     public func fetchSnapshot() {
@@ -57,7 +94,7 @@ public final class BatteryMonitor {
             IOObjectRelease(service)
         }
 
-        // 2. AppleSmartBatteryPack Registry Entry (for accurate temperature)
+        // 2. AppleSmartBatteryPack Registry Entry (for accurate pack temperature)
         let packService = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBatteryPack"))
         var packDict: [String: Any] = [:]
         if packService != 0 {
@@ -69,95 +106,126 @@ public final class BatteryMonitor {
             IOObjectRelease(packService)
         }
 
-        let isAC = battDict["ExternalConnected"] as? Bool ?? false
-        let isChg = battDict["IsCharging"] as? Bool ?? false
+        // 3. IOPSCopyPowerSourcesInfo for instantaneous AC / charging state
+        var iopsACConnected = false
+        var iopsIsCharging = false
+        if let blob = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+           let list = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef] {
+            for ps in list {
+                if let desc = IOPSGetPowerSourceDescription(blob, ps)?.takeUnretainedValue() as? [String: Any] {
+                    if let powerState = desc[kIOPSPowerSourceStateKey as String] as? String,
+                       powerState == (kIOPSACPowerValue as String) {
+                        iopsACConnected = true
+                    }
+                    if let chg = desc[kIOPSIsChargingKey as String] as? Bool, chg {
+                        iopsIsCharging = true
+                    }
+                }
+            }
+        }
+
         let level = battDict["CurrentCapacity"] as? Int ?? 0
         let bData = battDict["BatteryData"] as? [String: Any] ?? [:]
         let pDist = battDict["PowerDistribution"] as? [String: Any] ?? [:]
         let ptd = battDict["PowerTelemetryData"] as? [String: Any] ?? [:]
         let packBData = packDict["BatteryData"] as? [String: Any] ?? [:]
 
-        // Telemetry values from PowerTelemetryData (in mW)
-        let ptdSystemPowerInWatts = ((ptd["SystemPowerIn"] as? NSNumber)?.doubleValue ?? 0.0) / 1000.0
-        let ptdSystemLoadWatts = ((ptd["SystemLoad"] as? NSNumber)?.doubleValue ?? 0.0) / 1000.0
-        let ptdBattWatts = ((ptd["BatteryPower"] as? NSNumber)?.doubleValue ?? 0.0) / 1000.0
+        // Signed telemetry values from PowerTelemetryData & BatteryData (in mW -> W)
+        let ptdSystemPowerInWatts = max(0.0, signedMilliwattsToWatts(ptd["SystemPowerIn"]))
+        let ptdSystemLoadWatts = max(0.0, signedMilliwattsToWatts(ptd["SystemLoad"]))
+        let ptdBattWatts = signedMilliwattsToWatts(ptd["BatteryPower"])
+        let bDataBattWatts = signedMilliwattsToWatts(bData["BatteryPower"])
+        let ipdInputWatts = max(0.0, signedMilliwattsToWatts(pDist["IPDInputPower"]))
 
-        // Gas gauge BatteryPower (in mW)
-        let bDataBattWatts = ((bData["BatteryPower"] as? NSNumber)?.doubleValue ?? 0.0) / 1000.0
-        let ipdInputWatts = ((pDist["IPDInputPower"] as? NSNumber)?.doubleValue ?? 0.0) / 1000.0
+        // Primary real-time SMC float sensors (exact keys used by BatFiHelper):
+        // SBAP = Smart Battery Average Power (+W when discharging on battery, -W when charging into battery)
+        // PDTR = DC-In Adapter Total Power (+W from charger)
+        // PSTR = System Total Power
+        let smcSBAP = smc.readFloat(key: "SBAP")
+        let smcPDTR = smc.readFloat(key: "PDTR")
+        let smcPSTR = smc.readFloat(key: "PSTR")
 
-        // Real-time SMC float sensors (PSTR = System Load, PDTR = DC-In Adapter Power)
-        let smcAdapterWatts = smc.readFloat(key: "PDTR")
-        let smcSystemWatts = smc.readFloat(key: "PSTR")
+        let rawPDTR = max(0.0, (smcPDTR ?? 0.0) < 0.05 ? 0.0 : (smcPDTR ?? 0.0))
+        let regExternalConnected = battDict["ExternalConnected"] as? Bool ?? false
+        let isAC = regExternalConnected || iopsACConnected || rawPDTR > 0.5 || ptdSystemPowerInWatts > 0.5
 
         let adapterWatts: Double
         let systemWatts: Double
         let battWatts: Double
 
-        if isAC {
-            // 1. Adapter Power Input
-            if let pdtr = smcAdapterWatts, pdtr > 0.2 {
-                adapterWatts = pdtr
-            } else if ptdSystemPowerInWatts > 0.2 {
-                adapterWatts = ptdSystemPowerInWatts
-            } else {
-                adapterWatts = ipdInputWatts
-            }
+        if let sbap = smcSBAP, smcPDTR != nil {
+            // Exact hardware power balance from SMC:
+            // When on battery: pdtr = 0, sbap > 0 (e.g. +10.2W) -> system = 10.2W, batt = -10.2W
+            // When charging on AC: pdtr > 0 (e.g. +35.0W), sbap < 0 (e.g. -22.0W) -> system = 35.0 - 22.0 = 13.0W, batt = +22.0W
+            // When on AC paused/full: pdtr > 0 (e.g. +11.5W), sbap ~ 0 -> system = 11.5W, batt = 0.0W
+            let cleanSBAP = abs(sbap) < 0.03 ? 0.0 : sbap
+            let cleanPDTR = isAC ? max(rawPDTR, ptdSystemPowerInWatts, ipdInputWatts) : 0.0
 
-            // 2. Mac System Power Consumption
-            if let pstr = smcSystemWatts, pstr > 0.2 {
+            adapterWatts = cleanPDTR
+            battWatts = -cleanSBAP
+
+            let computedSys = cleanPDTR + cleanSBAP
+            if computedSys > 0.2 {
+                systemWatts = computedSys
+            } else if let pstr = smcPSTR, pstr > 0.2 {
                 systemWatts = pstr
             } else if ptdSystemLoadWatts > 0.2 {
                 systemWatts = ptdSystemLoadWatts
             } else {
-                systemWatts = max(0.5, adapterWatts - max(0, bDataBattWatts))
-            }
-
-            // 3. Power going into (or out of) Battery
-            if isChg {
-                if adapterWatts > systemWatts + 0.1 {
-                    battWatts = adapterWatts - systemWatts
-                } else if ptdBattWatts > 0.1 {
-                    battWatts = ptdBattWatts
-                } else {
-                    battWatts = max(0.1, bDataBattWatts)
-                }
-            } else {
-                if ptdBattWatts < -0.2 {
-                    battWatts = ptdBattWatts
-                } else {
-                    battWatts = 0.0
-                }
+                systemWatts = max(0.5, abs(cleanSBAP))
             }
         } else {
-            adapterWatts = 0.0
-            if let pstr = smcSystemWatts, pstr > 0.2 {
-                systemWatts = pstr
-                battWatts = -pstr
-            } else if abs(bDataBattWatts) > 0.1 {
-                systemWatts = abs(bDataBattWatts)
-                battWatts = -abs(bDataBattWatts)
+            // Fallback to signed IOKit PowerTelemetryData
+            if isAC {
+                adapterWatts = max(rawPDTR, ptdSystemPowerInWatts, ipdInputWatts)
+                battWatts = abs(ptdBattWatts) > 0.05 ? ptdBattWatts : bDataBattWatts
+                if ptdSystemLoadWatts > 0.2 {
+                    systemWatts = ptdSystemLoadWatts
+                } else if let pstr = smcPSTR, pstr > 0.2 {
+                    systemWatts = pstr
+                } else {
+                    systemWatts = max(0.5, adapterWatts - max(0.0, battWatts))
+                }
             } else {
-                systemWatts = max(0.5, ptdSystemLoadWatts)
+                adapterWatts = 0.0
+                let discharge = max(abs(ptdBattWatts), abs(bDataBattWatts), ptdSystemLoadWatts, smcPSTR ?? 0.5)
+                systemWatts = max(0.3, discharge)
                 battWatts = -systemWatts
             }
         }
 
-        // Temperature (pack temperature in hundredths of a degree Celsius)
-        let rawTemp = (packBData["Temperature"] as? NSNumber)?.doubleValue ?? 0.0
-        let tempCelsius = rawTemp > 0 ? (rawTemp / 100.0) : 25.0
+        let regIsCharging = battDict["IsCharging"] as? Bool ?? false
+        let isChg = isAC && (regIsCharging || iopsIsCharging || battWatts > 0.25)
+
+        // Temperature (pack temperature in hundredths of a degree Celsius, fallback to AppleSmartBattery Temperature)
+        let rawPackTemp = (packBData["Temperature"] as? NSNumber)?.doubleValue ?? 0.0
+        let rawBattTemp = (battDict["Temperature"] as? NSNumber)?.doubleValue ?? 0.0
+        let tempCelsius: Double
+        if rawPackTemp > 100 {
+            tempCelsius = rawPackTemp / 100.0
+        } else if rawBattTemp > 100 {
+            tempCelsius = rawBattTemp / 100.0
+        } else {
+            tempCelsius = 28.0
+        }
 
         // Capacities
-        let fcc = (bData["AppleRawMaxCapacity"] as? NSNumber)?.intValue ?? 0
-        let dc = (bData["DesignCapacity"] as? NSNumber)?.intValue ?? 0
-        let remCap = (bData["RemainingCapacity"] as? NSNumber)?.intValue ?? 0
+        let fcc = (battDict["AppleRawMaxCapacity"] as? NSNumber)?.intValue
+            ?? (bData["AppleRawMaxCapacity"] as? NSNumber)?.intValue
+            ?? (bData["FullChargeCapacity"] as? NSNumber)?.intValue ?? 0
+        let dc = (battDict["DesignCapacity"] as? NSNumber)?.intValue
+            ?? (bData["DesignCapacity"] as? NSNumber)?.intValue ?? 0
+        let remCap = (battDict["AppleRawCurrentCapacity"] as? NSNumber)?.intValue
+            ?? (bData["RemainingCapacity"] as? NSNumber)?.intValue ?? 0
 
-        let cycles = battDict["CycleCount"] as? Int ?? 0
-        let rawVolt = (battDict["Voltage"] as? NSNumber)?.doubleValue ?? 0.0
+        let cycles = battDict["CycleCount"] as? Int
+            ?? (bData["CycleCount"] as? NSNumber)?.intValue ?? 0
+        let rawVolt = (battDict["Voltage"] as? NSNumber)?.doubleValue
+            ?? (bData["Voltage"] as? NSNumber)?.doubleValue ?? 0.0
         let volts = rawVolt / 1000.0
-        let amps = (battDict["Amperage"] as? NSNumber)?.intValue ?? 0
+        let amps = Int(signedInt64(battDict["Amperage"] ?? battDict["InstantAmperage"]))
         let timeRemaining = battDict["TimeRemaining"] as? Int
-        let fullyCharged = battDict["FullyCharged"] as? Bool ?? (level >= 100)
+        let fullyCharged = (battDict["FullyCharged"] as? Bool ?? false) || (level >= 100 && !isChg)
 
         newInfo.currentPercentage = level
         newInfo.isCharging = isChg
@@ -180,18 +248,23 @@ public final class BatteryMonitor {
         if isAC {
             lastDisconnectDate = nil
             newInfo.elapsedTimeSeconds = 0
+            lastNotifiedLowBattery = false
         } else {
             if lastDisconnectDate == nil {
                 lastDisconnectDate = Date()
             }
             newInfo.elapsedTimeSeconds = Int(Date().timeIntervalSince(lastDisconnectDate ?? Date()))
+
+            if settings.notifyOnLowBattery && level <= settings.lowBatteryThreshold && !lastNotifiedLowBattery {
+                notifications.notifyLowBattery(level: level)
+                lastNotifiedLowBattery = true
+            }
         }
 
         evaluateChargeControl(info: &newInfo)
 
-        DispatchQueue.main.async {
-            self.info = newInfo
-        }
+        self.info = newInfo
+        MenuBarController.shared.updateMenuBar()
     }
 
     private func evaluateChargeControl(info: inout BatteryInfo) {

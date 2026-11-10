@@ -16,15 +16,9 @@ public final class MenuBarController: NSObject {
 
     @MainActor
     public func setup() {
-        // Render and assign custom macOS 27 Glass App Icon to NSApp
-        let iconHosting = NSHostingView(rootView: AppIconView(size: 256))
-        iconHosting.frame = NSRect(x: 0, y: 0, width: 256, height: 256)
-        if let bitmapRep = iconHosting.bitmapImageRepForCachingDisplay(in: iconHosting.bounds) {
-            iconHosting.cacheDisplay(in: iconHosting.bounds, to: bitmapRep)
-            let appIcon = NSImage(size: NSSize(width: 256, height: 256))
-            appIcon.addRepresentation(bitmapRep)
-            NSApp.applicationIconImage = appIcon
-        }
+        // Assign the Blue Side-View Lego Brick App Icon to NSApp
+        let appIcon = AppIconGenerator.makeImage(size: 512)
+        NSApp.applicationIconImage = appIcon
 
         // Create NSStatusItem
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -53,13 +47,15 @@ public final class MenuBarController: NSObject {
         pop.contentViewController = hostingController
         self.popover = pop
 
-        // Update menu bar appearance periodically
+        // Update menu bar appearance immediately and periodically in .common RunLoop mode
         updateMenuBar()
-        updateTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 1.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.updateMenuBar()
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        self.updateTimer = timer
     }
 
     @MainActor
@@ -85,6 +81,13 @@ public final class MenuBarController: NSObject {
         }
     }
 
+    @MainActor
+    public func closePopoverIfNeeded() {
+        if !AppSettings.shared.keepMenuOpenOnAction {
+            popover?.performClose(nil)
+        }
+    }
+
     @objc private func statusBarButtonClicked(_ sender: NSStatusBarButton) {
         guard let popover = popover else { return }
 
@@ -107,13 +110,13 @@ public final class MenuBarController: NSObject {
             let hostingController = NSHostingController(rootView: settingsView)
 
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 660, height: 620),
+                contentRect: NSRect(x: 0, y: 0, width: 700, height: 620),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false
             )
             window.title = "VoltControl — Настройки"
-            window.minSize = NSSize(width: 620, height: 520)
+            window.minSize = NSSize(width: 660, height: 520)
             window.contentViewController = hostingController
             window.isReleasedWhenClosed = false
             window.center()

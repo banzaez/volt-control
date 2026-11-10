@@ -44,6 +44,7 @@ public struct MainPopoverView: View {
                     checkmark: settings.isTopUpActive,
                     action: {
                         monitor.toggleTopUp()
+                        MenuBarController.shared.closePopoverIfNeeded()
                     }
                 )
 
@@ -52,6 +53,7 @@ public struct MainPopoverView: View {
                     checkmark: settings.isChargingPaused,
                     action: {
                         monitor.togglePause()
+                        MenuBarController.shared.closePopoverIfNeeded()
                     }
                 )
 
@@ -83,7 +85,7 @@ public struct MainPopoverView: View {
             .padding(.top, 4)
             .padding(.bottom, 6)
         }
-        .frame(width: 288)
+        .frame(width: 304)
         .background(VisualEffectBlur(material: .popover, blendingMode: .behindWindow))
     }
 
@@ -149,26 +151,33 @@ public struct MainPopoverView: View {
         }
     }
 
-    // MARK: - 2. Power Distribution (Минималистичное и точное распределение ватт)
+    // MARK: - 2. Power Distribution (Точное распределение ватт от батареи и от адаптера)
     private var powerDistributionSection: some View {
         let info = monitor.info
         let isAC = info.isACConnected
-        let isChg = info.isCharging && info.batteryPowerWatts > 0.1
-        let battWatts = abs(info.batteryPowerWatts)
-        let sysWatts = info.systemPowerWatts
-        let adapterWatts = max(info.adapterPowerWatts, isChg ? (sysWatts + battWatts) : sysWatts)
+        let isChg = info.isCharging || (isAC && info.batteryPowerWatts > 0.25)
+        let sysWatts = max(0.1, info.systemPowerWatts)
+        let battChargeWatts = isChg ? max(0.0, info.batteryPowerWatts) : 0.0
+        let battDischargeWatts = max(0.1, abs(info.batteryPowerWatts))
+        let adapterWatts = max(info.adapterPowerWatts, sysWatts + battChargeWatts)
 
         return VStack(alignment: .leading, spacing: 8) {
-            Text("Распределение питания")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+            HStack {
+                Text("Распределение питания")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(isAC ? (isChg ? "От сети • Зарядка" : "От сети • Обход") : "От батареи")
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(isAC ? Color.blue : Color.secondary)
+            }
 
             if !isAC {
-                // Работа от аккумулятора: [ 🔋 5,6 Вт ] → [ 💻 5,6 Вт ]
+                // Работа от аккумулятора: [ 🔋 X,X Вт ] → [ 💻 X,X Вт ]
                 HStack(spacing: 8) {
                     powerPill(
                         icon: "battery.75",
-                        watts: formattedWatts(battWatts),
+                        watts: formattedWatts(battDischargeWatts),
                         caption: "Из батареи"
                     )
 
@@ -182,8 +191,8 @@ public struct MainPopoverView: View {
                         caption: "Расход Mac"
                     )
                 }
-            } else if isChg {
-                // Зарядка от сети: [ 🔌 18,8 Вт ] → [ 💻 7,3 Вт ] + [ 🔋 11,5 Вт ]
+            } else {
+                // Питание от адаптера: [ 🔌 Адаптер ] → [ 💻 На Mac ] + [ ⚡ В батарею ]
                 HStack(spacing: 5) {
                     powerPill(
                         icon: "powerplug.fill",
@@ -206,44 +215,27 @@ public struct MainPopoverView: View {
                         .foregroundStyle(.secondary)
 
                     powerPill(
-                        icon: "battery.100percent.bolt",
-                        watts: formattedWatts(battWatts),
-                        caption: "В батарею"
-                    )
-                }
-            } else {
-                // Питание от сети (пауза / лимит достигнут): [ 🔌 7,3 Вт ] → [ 💻 7,3 Вт ]
-                HStack(spacing: 8) {
-                    powerPill(
-                        icon: "powerplug.fill",
-                        watts: formattedWatts(adapterWatts),
-                        caption: "Адаптер"
-                    )
-
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.secondary)
-
-                    powerPill(
-                        icon: "laptopcomputer",
-                        watts: formattedWatts(sysWatts),
-                        caption: "На Mac (обход)"
+                        icon: isChg ? "bolt.fill" : "pause.fill",
+                        watts: formattedWatts(battChargeWatts),
+                        caption: isChg ? "В батарею" : "Пауза"
                     )
                 }
             }
 
-            if settings.menuShowPowerSplitBar && isAC && isChg {
-                let total = max(0.5, sysWatts + battWatts)
-                let sysShare = min(max(0.1, sysWatts / total), 0.9)
+            if settings.menuShowPowerSplitBar && isAC {
+                let total = max(0.5, sysWatts + battChargeWatts)
+                let sysShare = isChg ? min(max(0.12, sysWatts / total), 0.88) : 1.0
                 GeometryReader { geo in
                     HStack(spacing: 2) {
                         Capsule()
                             .fill(Color.primary.opacity(0.45))
                             .frame(width: geo.size.width * CGFloat(sysShare), height: 3)
-                        Capsule()
-                            .fill(Color.primary.opacity(0.20))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 3)
+                        if isChg {
+                            Capsule()
+                                .fill(Color.blue.opacity(0.65))
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 3)
+                        }
                     }
                 }
                 .frame(height: 3)
@@ -252,20 +244,20 @@ public struct MainPopoverView: View {
     }
 
     private func powerPill(icon: String, watts: String, caption: String) -> some View {
-        VStack(spacing: 2) {
-            HStack(spacing: 4) {
+        VStack(spacing: 2.5) {
+            HStack(spacing: 3.5) {
                 Image(systemName: icon)
-                    .font(.system(size: 10.5))
+                    .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                 Text(watts)
                     .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(.primary)
                     .monospacedDigit()
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, 6)
+            .padding(.horizontal, 5)
             .padding(.vertical, 5)
             .background(
                 Capsule(style: .continuous)

@@ -62,6 +62,7 @@ public final class AppSettings {
     public var pollingIntervalSeconds: Double {
         didSet {
             UserDefaults.standard.set(pollingIntervalSeconds, forKey: "pollingIntervalSeconds")
+            BatteryMonitor.shared.rescheduleTimer()
         }
     }
 

@@ -6,7 +6,12 @@ public final class NotificationService: Sendable {
 
     private init() {}
 
+    private var canUseNotifications: Bool {
+        Bundle.main.bundleIdentifier != nil && Bundle.main.bundleURL.pathExtension == "app"
+    }
+
     public func requestAuthorization() {
+        guard canUseNotifications else { return }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, error in
             if let error = error {
                 print("Notification permission error: \(error.localizedDescription)")
@@ -15,6 +20,7 @@ public final class NotificationService: Sendable {
     }
 
     public func sendNotification(title: String, subtitle: String? = nil, body: String, identifier: String) {
+        guard canUseNotifications else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         if let sub = subtitle {
@@ -57,6 +63,15 @@ public final class NotificationService: Sendable {
             subtitle: String(format: "Температура батареи: %.1f°C", temperature),
             body: "Температура превысила заданный порог. Зарядка временно приостановлена.",
             identifier: "voltcontrol.temperature.warning"
+        )
+    }
+
+    public func notifyLowBattery(level: Int) {
+        sendNotification(
+            title: "VoltControl",
+            subtitle: "Низкий уровень заряда (\(level)%)",
+            body: "Рекомендуется подключить адаптер питания.",
+            identifier: "voltcontrol.low.battery"
         )
     }
 }

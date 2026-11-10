@@ -1,7 +1,138 @@
 import SwiftUI
 import AppKit
 
-// MARK: - Minimalist Monochrome App Icon View
+// MARK: - Blue Side-View Lego Brick App Icon Generator & View
+public enum AppIconGenerator {
+    public static func makeImage(size: CGFloat = 256) -> NSImage {
+        let img = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
+            drawLegoBrickIcon(in: rect)
+            return true
+        }
+        return img
+    }
+
+    public static func drawLegoBrickIcon(in rect: NSRect) {
+        let s = min(rect.width, rect.height)
+        let inset = s * 0.0625
+        let bgRect = NSRect(x: rect.minX + inset, y: rect.minY + inset, width: s - inset * 2, height: s - inset * 2)
+        let cornerRadius = bgRect.width * 0.225
+
+        // 1. Squircle Background (Deep Navy-Slate with subtle blue ambient glow)
+        let squircle = NSBezierPath(roundedRect: bgRect, xRadius: cornerRadius, yRadius: cornerRadius)
+        let bgGradient = NSGradient(colors: [
+            NSColor(calibratedRed: 0.11, green: 0.16, blue: 0.26, alpha: 1.0),
+            NSColor(calibratedRed: 0.06, green: 0.09, blue: 0.15, alpha: 1.0)
+        ])!
+        bgGradient.draw(in: squircle, angle: -90)
+
+        // Subtle outer border on squircle
+        squircle.lineWidth = max(1.0, s * 0.014)
+        NSColor(calibratedRed: 0.25, green: 0.55, blue: 1.0, alpha: 0.35).setStroke()
+        squircle.stroke()
+
+        // 2. Blue Lego Brick (Side Profile View)
+        // Dimensions of the brick in side view:
+        // Main brick body + 2 classic Lego studs on top + subtle bottom interlock lip
+        let bodyWidth = s * 0.62
+        let bodyHeight = s * 0.32
+        let bodyX = rect.midX - bodyWidth / 2.0
+        let bodyY = rect.midY - bodyHeight / 2.0 - s * 0.04
+
+        // Drop shadow under brick
+        let shadowRect = NSRect(x: bodyX + s * 0.02, y: bodyY - s * 0.035, width: bodyWidth - s * 0.04, height: s * 0.06)
+        let shadowPath = NSBezierPath(ovalIn: shadowRect)
+        NSColor(calibratedWhite: 0.0, alpha: 0.45).setFill()
+        shadowPath.fill()
+
+        // Bottom Lego interlock lip (subtle recessed base seen from the side)
+        let lipWidth = bodyWidth * 0.86
+        let lipHeight = s * 0.032
+        let lipRect = NSRect(
+            x: rect.midX - lipWidth / 2.0,
+            y: bodyY - lipHeight * 0.65,
+            width: lipWidth,
+            height: lipHeight
+        )
+        let lipPath = NSBezierPath(roundedRect: lipRect, xRadius: s * 0.012, yRadius: s * 0.012)
+        NSColor(calibratedRed: 0.02, green: 0.28, blue: 0.68, alpha: 1.0).setFill()
+        lipPath.fill()
+
+        // Two Lego Studs on top (side view of a 2-stud brick)
+        let studWidth = bodyWidth * 0.31
+        let studHeight = s * 0.095
+        let studSpacing = bodyWidth * 0.14
+        let leftStudX = rect.midX - studSpacing / 2.0 - studWidth
+        let rightStudX = rect.midX + studSpacing / 2.0
+        let studY = bodyY + bodyHeight - s * 0.012
+        let studRadius = s * 0.024
+
+        let studGradient = NSGradient(colors: [
+            NSColor(calibratedRed: 0.18, green: 0.62, blue: 1.00, alpha: 1.0),
+            NSColor(calibratedRed: 0.04, green: 0.45, blue: 0.92, alpha: 1.0)
+        ])!
+
+        for studX in [leftStudX, rightStudX] {
+            let studRect = NSRect(x: studX, y: studY, width: studWidth, height: studHeight)
+            let studPath = NSBezierPath(roundedRect: studRect, xRadius: studRadius, yRadius: studRadius)
+            studGradient.draw(in: studPath, angle: 0)
+
+            // Top specular highlight on stud
+            let studHighlightRect = NSRect(
+                x: studRect.minX + studWidth * 0.08,
+                y: studRect.maxY - studHeight * 0.26,
+                width: studWidth * 0.84,
+                height: studHeight * 0.16
+            )
+            let studHighlight = NSBezierPath(roundedRect: studHighlightRect, xRadius: studRadius * 0.5, yRadius: studRadius * 0.5)
+            NSColor(calibratedWhite: 1.0, alpha: 0.35).setFill()
+            studHighlight.fill()
+
+            studPath.lineWidth = max(0.8, s * 0.01)
+            NSColor(calibratedWhite: 1.0, alpha: 0.25).setStroke()
+            studPath.stroke()
+        }
+
+        // Main Brick Body (Side View)
+        let bodyRect = NSRect(x: bodyX, y: bodyY, width: bodyWidth, height: bodyHeight)
+        let bodyRadius = s * 0.038
+        let bodyPath = NSBezierPath(roundedRect: bodyRect, xRadius: bodyRadius, yRadius: bodyRadius)
+
+        let bodyGradient = NSGradient(colors: [
+            NSColor(calibratedRed: 0.14, green: 0.58, blue: 1.00, alpha: 1.0),
+            NSColor(calibratedRed: 0.03, green: 0.42, blue: 0.90, alpha: 1.0),
+            NSColor(calibratedRed: 0.01, green: 0.32, blue: 0.76, alpha: 1.0)
+        ])!
+        bodyGradient.draw(in: bodyPath, angle: -90)
+
+        // Top bevel highlight along brick body
+        let topBevelRect = NSRect(
+            x: bodyRect.minX + s * 0.025,
+            y: bodyRect.maxY - s * 0.032,
+            width: bodyRect.width - s * 0.05,
+            height: s * 0.018
+        )
+        let topBevelPath = NSBezierPath(roundedRect: topBevelRect, xRadius: s * 0.009, yRadius: s * 0.009)
+        NSColor(calibratedWhite: 1.0, alpha: 0.38).setFill()
+        topBevelPath.fill()
+
+        // Bottom inner shadow line on brick body
+        let bottomShadeRect = NSRect(
+            x: bodyRect.minX + s * 0.02,
+            y: bodyRect.minY + s * 0.012,
+            width: bodyRect.width - s * 0.04,
+            height: s * 0.02
+        )
+        let bottomShadePath = NSBezierPath(roundedRect: bottomShadeRect, xRadius: s * 0.008, yRadius: s * 0.008)
+        NSColor(calibratedWhite: 0.0, alpha: 0.22).setFill()
+        bottomShadePath.fill()
+
+        // Crisp border on main brick body
+        bodyPath.lineWidth = max(1.0, s * 0.012)
+        NSColor(calibratedWhite: 1.0, alpha: 0.28).setStroke()
+        bodyPath.stroke()
+    }
+}
+
 public struct AppIconView: View {
     public let size: CGFloat
 
@@ -10,57 +141,10 @@ public struct AppIconView: View {
     }
 
     public var body: some View {
-        ZStack {
-            // Minimalist Graphite Squircle
-            RoundedRectangle(cornerRadius: size * 0.225, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(white: 0.20),
-                            Color(white: 0.11)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .shadow(color: Color.black.opacity(0.22), radius: size * 0.08, x: 0, y: size * 0.03)
-
-            // Subtle Inner Highlight
-            RoundedRectangle(cornerRadius: size * 0.225, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.28),
-                            Color.white.opacity(0.06)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: max(1.0, size * 0.018)
-                )
-
-            // Minimalist Battery Outline + Bolt
-            HStack(spacing: size * 0.025) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: size * 0.10, style: .continuous)
-                        .fill(Color.white.opacity(0.08))
-                        .frame(width: size * 0.54, height: size * 0.34)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: size * 0.10, style: .continuous)
-                                .stroke(Color.white.opacity(0.85), lineWidth: max(1.2, size * 0.03))
-                        )
-
-                    Image(systemName: "bolt.fill")
-                        .font(.system(size: size * 0.22, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-
-                RoundedRectangle(cornerRadius: size * 0.025, style: .continuous)
-                    .fill(Color.white.opacity(0.75))
-                    .frame(width: size * 0.04, height: size * 0.12)
-            }
-        }
-        .frame(width: size, height: size)
+        Image(nsImage: AppIconGenerator.makeImage(size: max(64, size * 2)))
+            .resizable()
+            .interpolation(.high)
+            .frame(width: size, height: size)
     }
 }
 
@@ -92,7 +176,7 @@ extension View {
     }
 }
 
-// MARK: - Minimalist Monochrome Custom Slider
+// MARK: - Minimalist Blue-Accented Custom Slider
 public struct GlassSlider: View {
     @Binding public var value: Double
     public let range: ClosedRange<Double>
@@ -138,9 +222,15 @@ public struct GlassSlider: View {
                         .fill(Color.primary.opacity(0.10))
                         .frame(height: 6)
 
-                    // Active Monochrome Fill
+                    // Active Blue Fill
                     Capsule(style: .continuous)
-                        .fill(Color.primary.opacity(0.70))
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.blue.opacity(0.85), Color.blue],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
                         .frame(width: max(6, thumbX + thumbDiameter * 0.5), height: 6)
 
                     // Subtle Tick Marks
@@ -158,11 +248,11 @@ public struct GlassSlider: View {
                         .frame(width: thumbDiameter, height: thumbDiameter)
                         .overlay(
                             Circle()
-                                .fill(Color.white.opacity(0.9))
+                                .fill(Color.white.opacity(0.95))
                         )
                         .overlay(
                             Circle()
-                                .stroke(Color.black.opacity(0.25), lineWidth: 0.8)
+                                .stroke(Color.black.opacity(0.22), lineWidth: 0.8)
                         )
                         .shadow(color: Color.black.opacity(0.20), radius: isDragging ? 3 : 1.5, x: 0, y: 1)
                         .scaleEffect(isDragging ? 1.08 : (isHovered ? 1.03 : 1.0))
@@ -197,7 +287,7 @@ public struct GlassSlider: View {
             }
             .frame(height: 20)
 
-            // Monochrome Preset Pills
+            // Preset Pills
             if !presets.isEmpty {
                 HStack(spacing: 5) {
                     ForEach(presets, id: \.self) { preset in
@@ -213,13 +303,13 @@ public struct GlassSlider: View {
                                 .padding(.vertical, 2.5)
                                 .background(
                                     RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                        .fill(isSelected ? Color.primary.opacity(0.15) : Color.primary.opacity(0.04))
+                                        .fill(isSelected ? Color.blue.opacity(0.16) : Color.primary.opacity(0.04))
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                        .stroke(isSelected ? Color.primary.opacity(0.3) : Color.clear, lineWidth: 0.6)
+                                        .stroke(isSelected ? Color.blue.opacity(0.45) : Color.clear, lineWidth: 0.7)
                                 )
-                                .foregroundStyle(isSelected ? .primary : .secondary)
+                                .foregroundStyle(isSelected ? Color.blue : Color.secondary)
                         }
                         .buttonStyle(.plain)
                     }
@@ -238,7 +328,7 @@ public struct GlassSlider: View {
     }
 }
 
-// MARK: - Minimalist Monochrome Toggle Row
+// MARK: - Clean Blue-Accented Toggle Row
 public struct GlassToggleRow: View {
     public let icon: String
     public let title: String
@@ -259,10 +349,15 @@ public struct GlassToggleRow: View {
 
     public var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 20, alignment: .center)
+            ZStack {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.blue.opacity(0.12))
+                    .frame(width: 24, height: 24)
+
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.blue)
+            }
 
             VStack(alignment: .leading, spacing: 1.5) {
                 Text(title)
@@ -282,6 +377,7 @@ public struct GlassToggleRow: View {
             Toggle("", isOn: $isOn)
                 .labelsHidden()
                 .toggleStyle(.switch)
+                .tint(.blue)
                 .controlSize(.small)
         }
         .padding(.vertical, 2)

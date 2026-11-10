@@ -30,15 +30,15 @@ public enum SettingsSection: String, CaseIterable, Identifiable {
 
     public var iconName: String {
         switch self {
-        case .general: return "gearshape"
-        case .charging: return "bolt.batteryblock"
-        case .energy: return "gauge.with.dots.needle.67percent"
-        case .menu: return "list.bullet.rectangle"
-        case .icon: return "menubar.rectangle"
-        case .diagnostics: return "waveform.path.ecg.rectangle"
-        case .notifications: return "bell"
-        case .smc: return "cpu"
-        case .about: return "info.circle"
+        case .general: return "slider.horizontal.3"
+        case .charging: return "bolt.batteryblock.fill"
+        case .energy: return "leaf.fill"
+        case .menu: return "menubar.dock.rectangle"
+        case .icon: return "battery.100percent.bolt"
+        case .diagnostics: return "waveform.path.ecg"
+        case .notifications: return "bell.badge.fill"
+        case .smc: return "cpu.fill"
+        case .about: return "cube.fill"
         }
     }
 }
@@ -55,9 +55,9 @@ public struct SettingsView: View {
 
     public var body: some View {
         HStack(spacing: 0) {
-            // MARK: - Left Sidebar (Standard macOS Settings Sidebar)
+            // MARK: - Left Sidebar (Wider so all section titles including "Энергосбережение" fit on 1 line)
             sidebarView
-                .frame(width: 200)
+                .frame(width: 232)
 
             Divider()
 
@@ -92,18 +92,18 @@ public struct SettingsView: View {
             }
             .background(Color(nsColor: .windowBackgroundColor))
         }
-        .frame(minWidth: 640, idealWidth: 660, minHeight: 560, idealHeight: 620)
+        .frame(minWidth: 680, idealWidth: 700, minHeight: 560, idealHeight: 620)
     }
 
     // MARK: - Sidebar
     private var sidebarView: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                AppIconView(size: 30)
+                AppIconView(size: 32)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text("VoltControl")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 13.5, weight: .semibold))
                     Text("\(monitor.info.currentPercentage)% • \(String(format: "%.1f Вт", monitor.info.systemPowerWatts).replacingOccurrences(of: ".", with: ","))")
                         .font(.system(size: 10.5))
                         .foregroundStyle(.secondary)
@@ -115,7 +115,7 @@ public struct SettingsView: View {
             .padding(.bottom, 6)
 
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 2) {
+                VStack(spacing: 3) {
                     ForEach(SettingsSection.allCases) { section in
                         sidebarButton(for: section)
                     }
@@ -133,23 +133,30 @@ public struct SettingsView: View {
         return Button(action: {
             selectedSection = section
         }) {
-            HStack(spacing: 9) {
-                Image(systemName: section.iconName)
-                    .font(.system(size: 12.5, weight: isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? Color.primary : Color.secondary)
-                    .frame(width: 18, alignment: .center)
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(isSelected ? Color.blue : Color.blue.opacity(0.12))
+                        .frame(width: 24, height: 24)
+
+                    Image(systemName: section.iconName)
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(isSelected ? Color.white : Color.blue)
+                }
 
                 Text(section.rawValue)
-                    .font(.system(size: 12.5, weight: isSelected ? .medium : .regular))
+                    .font(.system(size: 12.5, weight: isSelected ? .semibold : .regular))
                     .foregroundStyle(Color.primary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
 
-                Spacer()
+                Spacer(minLength: 4)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6.5)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5.5)
             .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(isSelected ? Color.primary.opacity(0.10) : Color.clear)
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(isSelected ? Color.blue.opacity(0.14) : Color.clear)
             )
             .contentShape(Rectangle())
         }
@@ -157,12 +164,24 @@ public struct SettingsView: View {
     }
 
     private func sectionHeader(_ section: SettingsSection) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(section.rawValue)
-                .font(.system(size: 16, weight: .semibold))
-            Text(section.subtitle)
-                .font(.system(size: 11.5))
-                .foregroundStyle(.secondary)
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.blue.opacity(0.14))
+                    .frame(width: 32, height: 32)
+
+                Image(systemName: section.iconName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.blue)
+            }
+
+            VStack(alignment: .leading, spacing: 1.5) {
+                Text(section.rawValue)
+                    .font(.system(size: 16, weight: .semibold))
+                Text(section.subtitle)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(.bottom, 2)
     }
@@ -196,6 +215,7 @@ public struct SettingsView: View {
                     Spacer()
                     Text(String(format: "%.0f сек", settings.pollingIntervalSeconds))
                         .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color.blue)
                         .monospacedDigit()
                 }
 
@@ -230,13 +250,17 @@ public struct SettingsView: View {
                     Spacer()
                     Text("\(settings.chargeLimit)%")
                         .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.blue)
                         .monospacedDigit()
                 }
 
                 GlassSlider(
                     value: Binding(
                         get: { Double(settings.chargeLimit) },
-                        set: { settings.chargeLimit = Int($0) }
+                        set: {
+                            settings.chargeLimit = Int($0)
+                            monitor.fetchSnapshot()
+                        }
                     ),
                     in: 50...100,
                     step: 1,
@@ -248,7 +272,7 @@ public struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 GlassToggleRow(
-                    icon: "bolt",
+                    icon: "bolt.fill",
                     title: "Зарядить до 100% (Top Up)",
                     subtitle: "Временно игнорировать установленный лимит и зарядить до максимума",
                     isOn: Binding(
@@ -260,7 +284,7 @@ public struct SettingsView: View {
                 Divider().opacity(0.35)
 
                 GlassToggleRow(
-                    icon: "arrow.uturn.backward",
+                    icon: "arrow.uturn.backward.circle.fill",
                     title: "Автоматический возврат к лимиту после 100%",
                     subtitle: "После достижения 100% автоматически вернуть ограничение \(settings.chargeLimit)%",
                     isOn: $settings.autoResetTopUp
@@ -269,7 +293,7 @@ public struct SettingsView: View {
                 Divider().opacity(0.35)
 
                 GlassToggleRow(
-                    icon: "pause",
+                    icon: "pause.circle.fill",
                     title: "Работать от батареи / Пауза зарядки",
                     subtitle: "Принудительно приостановить подачу тока заряда в аккумулятор",
                     isOn: Binding(
@@ -297,6 +321,7 @@ public struct SettingsView: View {
                         Spacer()
                         Text("-\(settings.sailingDelta)% (до \(max(40, settings.chargeLimit - settings.sailingDelta))%)")
                             .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Color.blue)
                             .monospacedDigit()
                     }
 
@@ -331,6 +356,7 @@ public struct SettingsView: View {
                         Spacer()
                         Text(String(format: "%.0f °C", settings.maxAllowedTempCelsius))
                             .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Color.blue)
                             .monospacedDigit()
                     }
 
@@ -362,6 +388,7 @@ public struct SettingsView: View {
                     Spacer()
                     Text(String(format: "%.0f%% CPU", settings.highEnergyThresholdCPU))
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color.blue)
                         .monospacedDigit()
                 }
 
@@ -386,6 +413,7 @@ public struct SettingsView: View {
                     Spacer()
                     Text(String(format: "%.0f%% CPU", settings.veryHighEnergyThresholdCPU))
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color.blue)
                         .monospacedDigit()
                 }
 
@@ -401,7 +429,7 @@ public struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 GlassToggleRow(
-                    icon: "gearshape.2",
+                    icon: "gearshape.2.fill",
                     title: "Учитывать системные фоновые демоны",
                     subtitle: "Включать в список Топ-4 процессы вроде WindowServer, kernel_task и mds_stores",
                     isOn: Binding(
@@ -430,6 +458,7 @@ public struct SettingsView: View {
                     Spacer()
                     Text(String(format: "%.0f сек", settings.processScanIntervalSeconds))
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color.blue)
                         .monospacedDigit()
                 }
 
@@ -480,7 +509,7 @@ public struct SettingsView: View {
                     .foregroundStyle(.secondary)
 
                 GlassToggleRow(
-                    icon: "clock",
+                    icon: "clock.fill",
                     title: "Показывать «Осталось времени»",
                     subtitle: "Расчетное время автономной работы или время до окончания зарядки",
                     isOn: $settings.menuShowTimeRemaining
@@ -489,7 +518,7 @@ public struct SettingsView: View {
                 Divider().opacity(0.35)
 
                 GlassToggleRow(
-                    icon: "stopwatch",
+                    icon: "stopwatch.fill",
                     title: "Показывать «Прошедшее время»",
                     subtitle: "Длительность работы от аккумулятора",
                     isOn: $settings.menuShowElapsedTime
@@ -507,7 +536,7 @@ public struct SettingsView: View {
                 Divider().opacity(0.35)
 
                 GlassToggleRow(
-                    icon: "info.circle",
+                    icon: "heart.text.square.fill",
                     title: "Строка телеметрии (Здоровье • Температура • Циклы)",
                     subtitle: "Компактная сводка параметров аккумулятора под основным блоком",
                     isOn: $settings.menuShowCompactTelemetry
@@ -521,7 +550,7 @@ public struct SettingsView: View {
                     .foregroundStyle(.secondary)
 
                 GlassToggleRow(
-                    icon: "bolt.horizontal",
+                    icon: "bolt.horizontal.fill",
                     title: "Блок «Распределение питания»",
                     subtitle: "Поток мощности в ваттах: Адаптер питания → На Mac + В батарею",
                     isOn: $settings.menuShowPowerDistribution
@@ -530,7 +559,7 @@ public struct SettingsView: View {
                 Divider().opacity(0.35)
 
                 GlassToggleRow(
-                    icon: "chart.bar",
+                    icon: "chart.bar.fill",
                     title: "Индикатор пропорции мощности",
                     subtitle: "Тонкая полоса баланса мощности между системой и зарядкой батареи",
                     isOn: $settings.menuShowPowerSplitBar
@@ -539,7 +568,7 @@ public struct SettingsView: View {
                 Divider().opacity(0.35)
 
                 GlassToggleRow(
-                    icon: "app.badge",
+                    icon: "app.badge.fill",
                     title: "Блок «Приложения с высоким энергопотреблением» (Топ 4)",
                     subtitle: "Фиксированная область на 4 приложения без изменения высоты меню",
                     isOn: $settings.menuShowHighEnergyApps
@@ -556,7 +585,7 @@ public struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Предпросмотр в строке меню")
                         .font(.system(size: 12.5, weight: .medium))
-                    Text("Текущий вид значка в статус-баре macOS")
+                    Text("Текущий вид значка в статус-баре macOS (одинаковый увеличенный размер)")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
@@ -570,8 +599,8 @@ public struct SettingsView: View {
                             .font(.system(size: 12, weight: .medium, design: .monospaced))
                     }
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(Color.primary.opacity(0.06))
@@ -591,7 +620,7 @@ public struct SettingsView: View {
                     }) {
                         HStack(spacing: 8) {
                             Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                                .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+                                .foregroundStyle(isSelected ? Color.blue : Color.secondary)
                             Text(style.localizedTitle)
                                 .font(.system(size: 12))
                             Spacer()
@@ -605,7 +634,7 @@ public struct SettingsView: View {
                 Divider().opacity(0.35)
 
                 GlassToggleRow(
-                    icon: "circle.lefthalf.filled",
+                    icon: "paintpalette.fill",
                     title: "Цветовая индикация статуса в значке",
                     subtitle: "Выделять значок цветом при активной зарядке или паузе (выкл. — строго монохромный)",
                     isOn: Binding(
@@ -631,7 +660,7 @@ public struct SettingsView: View {
                     }) {
                         HStack(spacing: 8) {
                             Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                                .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+                                .foregroundStyle(isSelected ? Color.blue : Color.secondary)
                             Text(mode.localizedTitle)
                                 .font(.system(size: 12))
                             Spacer()
@@ -646,7 +675,7 @@ public struct SettingsView: View {
         }
     }
 
-    // MARK: - 6. Диагностика (Diagnostics)
+    // MARK: - 6. Диагностика (Diagnostics — Aligned Equal-Size Metric Cards)
     private var diagnosticsSectionContent: some View {
         let info = monitor.info
         return VStack(alignment: .leading, spacing: 14) {
@@ -662,6 +691,7 @@ public struct SettingsView: View {
                     Spacer()
                     Text(String(format: "%.1f %%", info.healthPercentage).replacingOccurrences(of: ".", with: ","))
                         .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.blue)
                         .monospacedDigit()
                 }
 
@@ -671,7 +701,13 @@ public struct SettingsView: View {
                             .fill(Color.primary.opacity(0.10))
                             .frame(height: 6)
                         Capsule()
-                            .fill(Color.primary.opacity(0.65))
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.blue.opacity(0.8), Color.blue],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
                             .frame(width: max(6, geo.size.width * CGFloat(info.healthPercentage / 100.0)), height: 6)
                     }
                 }
@@ -689,7 +725,14 @@ public struct SettingsView: View {
             }
             .glassCard()
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+            // Uniform 2x3 Grid where every rectangle has the exact same size
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 10),
+                    GridItem(.flexible(), spacing: 10)
+                ],
+                spacing: 10
+            ) {
                 diagMetricCard(
                     title: "Циклы перезарядки",
                     value: "\(info.cycleCount)",
@@ -708,21 +751,21 @@ public struct SettingsView: View {
                     title: "Напряжение",
                     value: String(format: "%.2f В", info.voltageVolts).replacingOccurrences(of: ".", with: ","),
                     subtitle: "Текущий вольтаж",
-                    icon: "bolt"
+                    icon: "bolt.fill"
                 )
 
                 diagMetricCard(
                     title: "Сила тока",
                     value: "\(info.amperageMilliAmps) мА",
-                    subtitle: info.amperageMilliAmps >= 0 ? "Ток заряда" : "Ток разряда",
+                    subtitle: info.amperageMilliAmps >= 0 ? "Ток заряда / сети" : "Ток разряда",
                     icon: "speedometer"
                 )
 
                 diagMetricCard(
-                    title: "В батарею / Из батареи",
+                    title: "Мощность батареи",
                     value: String(format: "%+.1f Вт", info.batteryPowerWatts).replacingOccurrences(of: ".", with: ","),
-                    subtitle: "Мощность аккумулятора",
-                    icon: "battery.100"
+                    subtitle: info.batteryPowerWatts >= 0.1 ? "Заряд в батарею" : (info.isACConnected ? "Пауза / Обход" : "Разряд из батареи"),
+                    icon: "battery.100percent.bolt"
                 )
 
                 diagMetricCard(
@@ -736,26 +779,38 @@ public struct SettingsView: View {
     }
 
     private func diagMetricCard(title: String, value: String, subtitle: String, icon: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 24)
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.blue.opacity(0.12))
+                    .frame(width: 34, height: 34)
+
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.blue)
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
                 Text(value)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(.system(size: 14.5, weight: .semibold, design: .rounded))
                     .monospacedDigit()
+                    .lineLimit(1)
+
                 Text(subtitle)
-                    .font(.system(size: 10))
+                    .font(.system(size: 10.5))
                     .foregroundStyle(.tertiary)
+                    .lineLimit(1)
             }
-            Spacer()
+
+            Spacer(minLength: 0)
         }
-        .glassCard(cornerRadius: 8, padding: 10)
+        .frame(maxWidth: .infinity, minHeight: 54, maxHeight: 54, alignment: .leading)
+        .glassCard(cornerRadius: 9, padding: 12)
     }
 
     // MARK: - 7. Уведомления (Notifications)
@@ -763,7 +818,7 @@ public struct SettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 10) {
                 GlassToggleRow(
-                    icon: "checkmark.circle",
+                    icon: "checkmark.circle.fill",
                     title: "Уведомлять о достижении лимита заряда",
                     subtitle: "Оповещение при остановке зарядки на целевом пороге (\(settings.chargeLimit)%)",
                     isOn: $settings.notifyOnLimitReached
@@ -772,7 +827,7 @@ public struct SettingsView: View {
                 Divider().opacity(0.35)
 
                 GlassToggleRow(
-                    icon: "bolt.circle",
+                    icon: "bolt.circle.fill",
                     title: "Уведомлять об окончании зарядки до 100%",
                     subtitle: "Сообщать, когда режим полной зарядки завершен",
                     isOn: $settings.notifyOnFull
@@ -806,6 +861,7 @@ public struct SettingsView: View {
                         Spacer()
                         Text("\(settings.lowBatteryThreshold)%")
                             .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Color.blue)
                             .monospacedDigit()
                     }
 
@@ -830,12 +886,17 @@ public struct SettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(.secondary)
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(Color.blue.opacity(0.12))
+                            .frame(width: 30, height: 30)
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color.blue)
+                    }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Телеметрия IOKit и датчики SMC (PSTR / PDTR): Активны")
+                        Text("Телеметрия IOKit и датчики SMC (SBAP / PDTR): Активны")
                             .font(.system(size: 12.5, weight: .medium))
                         Text("Прямое чтение мощности адаптера, потребления системы Mac и заряда батареи в реальном времени.")
                             .font(.system(size: 11))
@@ -847,9 +908,14 @@ public struct SettingsView: View {
 
                 HStack(spacing: 12) {
                     let isPriv = SMCController.shared.status == .activePrivileged
-                    Image(systemName: isPriv ? "lock.open" : "lock")
-                        .font(.system(size: 18))
-                        .foregroundStyle(.secondary)
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(Color.blue.opacity(0.12))
+                            .frame(width: 30, height: 30)
+                        Image(systemName: isPriv ? "lock.open.fill" : "lock.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.blue)
+                    }
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(isPriv ? "Аппаратная запись SMC: Активна" : "Аппаратная запись SMC: Пользовательский режим")
@@ -890,13 +956,13 @@ public struct SettingsView: View {
     // MARK: - 9. О программе (About)
     private var aboutSectionContent: some View {
         VStack(spacing: 14) {
-            AppIconView(size: 72)
+            AppIconView(size: 80)
                 .padding(.top, 8)
 
             VStack(spacing: 3) {
                 Text("VoltControl")
                     .font(.system(size: 18, weight: .semibold))
-                Text("Версия 2.0")
+                Text("Версия 2.1")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
@@ -910,7 +976,9 @@ public struct SettingsView: View {
             VStack(spacing: 8) {
                 aboutInfoRow(label: "Телеметрия питания", value: "IOKit AppleSmartBattery + AppleSMC")
                 Divider().opacity(0.3)
-                aboutInfoRow(label: "Датчики мощности", value: "PDTR (Вход), PSTR (Система), BatteryPower")
+                aboutInfoRow(label: "Датчики мощности", value: "PDTR (Адаптер), SBAP (Батарея), PSTR (Mac)")
+                Divider().opacity(0.3)
+                aboutInfoRow(label: "Уведомления питания", value: "IOPSNotificationRunLoopSource")
                 Divider().opacity(0.3)
                 aboutInfoRow(label: "Платформа", value: "macOS (Apple Silicon & Intel)")
             }

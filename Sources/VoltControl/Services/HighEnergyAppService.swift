@@ -72,11 +72,13 @@ public final class HighEnergyAppService {
     public func scheduleTimer() {
         timer?.invalidate()
         let interval = max(2.0, AppSettings.shared.processScanIntervalSeconds)
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        let newTimer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.refresh()
             }
         }
+        RunLoop.main.add(newTimer, forMode: .common)
+        self.timer = newTimer
     }
 
     public func refresh() {
@@ -93,12 +95,13 @@ public final class HighEnergyAppService {
             proc.standardOutput = pipe
             do {
                 try proc.run()
-                proc.waitUntilExit()
             } catch {
                 return
             }
 
+            // Read before waitUntilExit to prevent pipe buffer deadlock
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            proc.waitUntilExit()
             guard let output = String(data: data, encoding: .utf8) else { return }
 
             var cpuMap: [String: Double] = [:]
@@ -162,7 +165,6 @@ public final class HighEnergyAppService {
                     }
                 }
 
-                // If system processes are enabled, also include top raw processes like WindowServer
                 if includeSystem {
                     let sysCandidates = ["WindowServer", "kernel_task", "mds_stores", "cloudd", "coreaudiod"]
                     for sysName in sysCandidates where !ignoredSet.contains(sysName.lowercased()) {
