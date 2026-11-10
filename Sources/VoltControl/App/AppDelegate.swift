@@ -11,11 +11,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         // Request user notification permissions
         NotificationService.shared.requestAuthorization()
 
+        // Start battery monitoring service first
+        BatteryMonitor.shared.startMonitoring()
+
         // Setup Menu Bar Item and Popover
         MenuBarController.shared.setup()
-
-        // Start battery monitoring service
-        BatteryMonitor.shared.startMonitoring()
     }
 
     public func applicationWillTerminate(_ notification: Notification) {

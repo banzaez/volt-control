@@ -21,9 +21,7 @@ public final class BatteryMonitor {
     private let smc = SMCController.shared
     private let notifications = NotificationService.shared
 
-    private init() {
-        startMonitoring()
-    }
+    private init() {}
 
     public func startMonitoring() {
         guard !isMonitoring else { return }
@@ -264,7 +262,7 @@ public final class BatteryMonitor {
         evaluateChargeControl(info: &newInfo)
 
         self.info = newInfo
-        MenuBarController.shared.updateMenuBar()
+        MenuBarController.shared.updateMenuBar(with: newInfo)
     }
 
     private func evaluateChargeControl(info: inout BatteryInfo) {

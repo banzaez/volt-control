@@ -58,10 +58,10 @@ public final class MenuBarController: NSObject, NSWindowDelegate {
     }
 
     @MainActor
-    public func updateMenuBar() {
+    public func updateMenuBar(with providedInfo: BatteryInfo? = nil) {
         guard let button = statusItem?.button else { return }
 
-        let info = BatteryMonitor.shared.info
+        let info = providedInfo ?? BatteryMonitor.shared.info
         let settings = AppSettings.shared
         let (icon, title) = MenuBarIconRenderer.renderIcon(info: info, settings: settings)
 
