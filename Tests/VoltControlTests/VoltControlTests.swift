@@ -48,11 +48,11 @@ struct VoltControlTests {
         var info = BatteryInfo()
         info.isCharging = true
         info.timeRemainingMinutes = 75
-        #expect(info.timeRemainingFormatted == "До полной зарядки: 1 ч 15 мин")
+        #expect(info.timeRemainingFormatted == "1 ч 15 мин")
 
         info.isCharging = false
         info.timeRemainingMinutes = 150
-        #expect(info.timeRemainingFormatted == "Осталось: 2 ч 30 мин работы")
+        #expect(info.timeRemainingFormatted == "2 ч 30 мин")
 
         info.isFullyCharged = true
         info.timeRemainingMinutes = nil

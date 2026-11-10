@@ -29,7 +29,7 @@ public final class MenuBarController: NSObject {
         let pop = NSPopover()
         pop.behavior = .transient
         pop.animates = true
-        pop.contentSize = NSSize(width: 350, height: 560)
+        pop.contentSize = NSSize(width: 275, height: 340)
 
         let popoverView = MainPopoverView(
             onOpenSettings: { [weak self] in

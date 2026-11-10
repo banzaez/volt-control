@@ -128,8 +128,8 @@ public final class AppSettings {
         self.tempProtectionEnabled = defaults.object(forKey: "tempProtectionEnabled") != nil ? defaults.bool(forKey: "tempProtectionEnabled") : true
         self.maxAllowedTempCelsius = defaults.object(forKey: "maxAllowedTempCelsius") != nil ? defaults.double(forKey: "maxAllowedTempCelsius") : 38.0
 
-        let modeRaw = defaults.string(forKey: "menuBarDisplayMode") ?? MenuBarDisplayMode.iconAndWatts.rawValue
-        self.menuBarDisplayMode = MenuBarDisplayMode(rawValue: modeRaw) ?? .iconAndWatts
+        let modeRaw = defaults.string(forKey: "menuBarDisplayMode") ?? MenuBarDisplayMode.iconAndPercent.rawValue
+        self.menuBarDisplayMode = MenuBarDisplayMode(rawValue: modeRaw) ?? .iconAndPercent
 
         self.notifyOnLimitReached = defaults.object(forKey: "notifyOnLimitReached") != nil ? defaults.bool(forKey: "notifyOnLimitReached") : true
         self.notifyOnFull = defaults.object(forKey: "notifyOnFull") != nil ? defaults.bool(forKey: "notifyOnFull") : true

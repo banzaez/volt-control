@@ -13,6 +13,7 @@ public final class BatteryMonitor {
     private var timer: Timer?
     private var lastNotifiedLevel: Int?
     private var lastNotifiedOverheatTime: Date?
+    private var lastDisconnectDate: Date? = Date().addingTimeInterval(-7800) // Default to ~2h session
     private let settings = AppSettings.shared
     private let smc = SMCController.shared
     private let notifications = NotificationService.shared
@@ -127,6 +128,18 @@ public final class BatteryMonitor {
         newInfo.designCapacityMah = dc
         newInfo.remainingCapacityMah = remCap
         newInfo.timeRemainingMinutes = timeRemaining
+        newInfo.isTopUpActive = settings.isTopUpActive
+        newInfo.chargeLimit = settings.chargeLimit
+
+        if isAC {
+            lastDisconnectDate = nil
+            newInfo.elapsedTimeSeconds = 0
+        } else {
+            if lastDisconnectDate == nil {
+                lastDisconnectDate = Date()
+            }
+            newInfo.elapsedTimeSeconds = Int(Date().timeIntervalSince(lastDisconnectDate ?? Date()))
+        }
 
         // Evaluate automated charge controls & limits
         evaluateChargeControl(info: &newInfo)

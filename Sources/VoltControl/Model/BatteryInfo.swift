@@ -66,7 +66,10 @@ public struct BatteryInfo: Sendable {
     public var remainingCapacityMah: Int = 0
 
     public var timeRemainingMinutes: Int? = nil
+    public var elapsedTimeSeconds: Int = 0
     public var isChargingInhibited: Bool = false
+    public var isTopUpActive: Bool = false
+    public var chargeLimit: Int = 80
 
     public var state: BatteryState {
         if !isACConnected {
@@ -97,25 +100,44 @@ public struct BatteryInfo: Sendable {
                 return "Полностью заряжен"
             }
             if isACConnected && !isCharging {
-                return "Питание напрямую от сети"
+                return "Питание от сети"
             }
             return "Расчёт..."
         }
         let hours = minutes / 60
         let mins = minutes % 60
-        if isCharging {
-            if hours > 0 {
-                return "До полной зарядки: \(hours) ч \(mins) мин"
-            } else {
-                return "До полной зарядки: \(mins) мин"
-            }
+        if hours > 0 {
+            return "\(hours) ч \(mins) мин"
         } else {
-            if hours > 0 {
-                return "Осталось: \(hours) ч \(mins) мин работы"
-            } else {
-                return "Осталось: \(mins) мин работы"
-            }
+            return "\(mins) мин"
         }
+    }
+
+    public var elapsedTimeFormatted: String {
+        guard elapsedTimeSeconds > 0 else { return "0 мин" }
+        let hours = elapsedTimeSeconds / 3600
+        let mins = (elapsedTimeSeconds % 3600) / 60
+        if hours > 0 {
+            return "\(hours) ч \(mins) мин"
+        } else {
+            return "\(mins) мин"
+        }
+    }
+
+    public var appModeDescription: String {
+        if !isACConnected {
+            return "Зарядное устройство не подключено"
+        }
+        if isTopUpActive {
+            return "Зарядка до 100%"
+        }
+        if isChargingInhibited {
+            return "Ограничение \(chargeLimit)% (Пауза)"
+        }
+        if isCharging {
+            return "Зарядка до \(chargeLimit)%"
+        }
+        return "Питание от сети"
     }
 
     public static let initial = BatteryInfo()
