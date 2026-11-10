@@ -103,16 +103,16 @@ public struct BatteryInfo: Sendable {
             return "Состояние"
         }
         if isACConnected && !isTopUpActive && chargeLimit < 100 && currentPercentage >= chargeLimit {
-            return "Лимит заряда (\(chargeLimit)%)"
+            return "Состояние"
         }
         if isCharging {
             if !isTopUpActive && chargeLimit < 100 {
-                return "До лимита (\(chargeLimit)%)"
+                return "До лимита"
             } else {
                 return "До полной зарядки"
             }
         }
-        return "Режим питания"
+        return "Питание"
     }
 
     public var timeRemainingFormatted: String {
@@ -121,7 +121,7 @@ public struct BatteryInfo: Sendable {
         }
         if isACConnected {
             if !isTopUpActive && chargeLimit < 100 && currentPercentage >= chargeLimit {
-                return "Лимит достигнут (\(currentPercentage)%)"
+                return "Лимит достигнут"
             }
             if !isCharging {
                 return "Питание от сети"
@@ -152,19 +152,22 @@ public struct BatteryInfo: Sendable {
 
     public var appModeDescription: String {
         if !isACConnected {
-            return "Зарядное устройство не подключено"
+            return "Работа от батареи"
         }
         if requiresPrivilegedHelper {
-            return "Пауза: требуется хелпер в Настройках"
+            return "Требуется хелпер"
         }
         if isTopUpActive {
-            return "Зарядка до 100%"
+            return "Полная зарядка"
         }
         if isChargingInhibited {
-            return "Ограничение \(chargeLimit)% (Пауза)"
+            return "Обход батареи"
+        }
+        if chargeLimit < 100 && currentPercentage >= chargeLimit {
+            return "Поддержание лимита"
         }
         if isCharging {
-            return "Зарядка до \(chargeLimit)%"
+            return chargeLimit < 100 ? "Ограничение заряда" : "Зарядка"
         }
         return "Питание от сети"
     }

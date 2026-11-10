@@ -77,7 +77,7 @@ public struct MainPopoverView: View {
 
             VStack(spacing: 1) {
                 NativeMenuItem(
-                    title: "Зарядить до 100%",
+                    title: "Зарядить полностью",
                     checkmark: settings.isTopUpActive,
                     action: {
                         monitor.toggleTopUp()
@@ -133,7 +133,7 @@ public struct MainPopoverView: View {
                 Text("Аккумулятор")
                     .font(.system(size: 13, weight: .bold))
                 Spacer()
-                Text("\(monitor.info.currentPercentage) %")
+                Text("\(monitor.info.currentPercentage)%")
                     .font(.system(size: 13, weight: .bold))
                     .monospacedDigit()
             }

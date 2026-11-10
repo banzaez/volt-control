@@ -57,7 +57,7 @@ struct VoltControlTests {
         info.chargeLimit = 80
         info.isTopUpActive = false
         info.timeRemainingMinutes = 25
-        #expect(info.timeRemainingLabel == "До лимита (80%)")
+        #expect(info.timeRemainingLabel == "До лимита")
         #expect(info.timeRemainingFormatted == "25 мин")
 
         info.chargeLimit = 100
@@ -77,8 +77,8 @@ struct VoltControlTests {
         limitInfo.chargeLimit = 80
         limitInfo.isTopUpActive = false
         limitInfo.timeRemainingMinutes = 0
-        #expect(limitInfo.timeRemainingLabel == "Лимит заряда (80%)")
-        #expect(limitInfo.timeRemainingFormatted == "Лимит достигнут (84%)")
+        #expect(limitInfo.timeRemainingLabel == "Состояние")
+        #expect(limitInfo.timeRemainingFormatted == "Лимит достигнут")
     }
 
     @Test("Settings Defaults")
