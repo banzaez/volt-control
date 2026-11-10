@@ -6,10 +6,9 @@
 
 [![macOS](https://img.shields.io/badge/macOS-14.0%2B-blue?logo=apple&style=flat-square)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-6.0-orange?logo=swift&style=flat-square)](https://swift.org/)
-[![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/banzaez/volt-control?style=flat-square)](https://github.com/banzaez/volt-control/releases/latest)
 
-[Overview](#-overview) • [Key Features](#-key-features) • [Telemetry & Hardware Math](#-telemetry--hardware-math) • [Installation](#-installation) • [Building from Source](#-building-from-source)
+[Overview](#-overview) • [Core Features](#-core-features) • [Engineering & Architecture](#-engineering--architecture) • [Configuration Guide](#-configuration-guide) • [Installation](#-installation) • [Building](#-building)
 
 </div>
 
@@ -17,125 +16,116 @@
 
 ## 📖 Overview
 
-MacBook batteries degrade significantly faster when consistently maintained at 100% state-of-charge under high operating temperatures while plugged into power. **VoltControl** provides granular battery charging thresholds, precise real-time wattage tracking across system components, and proactive high-impact process detection—built entirely with native macOS technologies and zero Electron overhead.
+MacBook lithium-ion cells experience accelerated chemical aging when continuously kept at 100% capacity under sustained charging voltage and elevated operating temperatures.
+
+**VoltControl** is engineered as a modern, lightweight native utility that provides:
+1. **Real-time power flow tracking**: Watt-level monitoring across DC adapter input, internal battery charging/discharging, and Mac system load.
+2. **Proactive charging thresholds**: Custom charge limits, hysteresis-based Sailing Mode, and thermal safeguards.
+3. **Stabilized process monitoring**: A fixed 3-slot energy consumer panel designed to eliminate menu bar popover flickering and height jumping.
+4. **Native efficiency**: Built using SwiftUI, AppKit, and IOKit, consuming less than 25 MB of memory with near-zero CPU footprint.
 
 ---
 
-## 🚀 Key Features
+## 🚀 Core Features
 
-### 1. Real-Time Power Distribution (Watts)
-- **Live Hardware Wattmeter**: Continuously calculates power flow across the entire power subsystem:
-  - **Adapter Input**: Real-time wattage supplied by USB-C or MagSafe chargers.
-  - **System Load**: Active MacBook hardware power consumption.
-  - **Battery Flow**: Exact charging rate (`+W`) into the battery or discharge rate (`-W`) during battery operation.
-  - **Bypass Detection**: Instantly reflects zero-load battery bypass when charging is inhibited or target limits are achieved.
-- **Power Split Balance Bar**: Visual distribution indicator comparing system draw against battery replenishment.
+### ⚡ Real-Time Power Telemetry
+Unlike conventional battery utilities that only display percentage increments, VoltControl reads live wattage directly from hardware sensors:
 
-### 2. Intelligent Battery Protection
-- **Configurable Charge Limits**: Set custom stopping thresholds between 50% and 100% (default: 80%) to maximize lithium-ion cycle longevity.
-- **Sailing Mode (Hysteresis)**: Prevents premature micro-cycling by permitting battery level to float within a user-defined delta (e.g., 4–5%) before charge resumption.
-- **One-Click Top Up**: Conveniently charge to 100% ahead of travel, with automatic restoration of the standard threshold upon completion.
-- **Thermal Safety Cutoff**: Automatic charging suspension if pack temperature exceeds safety thresholds (configurable between 32°C and 45°C).
-- **Direct Battery Operation**: Force bypass mode and run on battery power while remaining physically plugged in.
+| Metric | Source Sensor | Description |
+| :--- | :--- | :--- |
+| **Adapter Input** | `PDTR` (SMC) / `PowerTelemetryData` | Total DC-In power arriving from USB-C or MagSafe chargers. |
+| **Battery Power** | `SBAP` (SMC) / `AppleSmartBattery` | Signed wattage flow: `+W` when replenishing, `-W` during discharge. |
+| **System Load** | `PSTR` (SMC) / Computed Balance | Net real-time power consumed by the SoC, display, and peripherals. |
+| **Split Balance** | Real-time Ratio | Proportional balance bar showing how incoming power splits between system and cells. |
 
-### 3. Jitter-Free Energy Impact Monitor
-- **Fixed 3-Slot Layout**: The menu popover retains an exact, fixed 76 pt vertical footprint—eliminating UI layout jumps during process scanning.
-- **Intelligent Status Messaging**: Displays a clean system health card (*"No high energy apps · Process consumption normal"*) whenever background activity remains within normal operating limits.
-- **Customizable CPU Thresholds**: Individually adjust sensitivity for *High* and *Very High* consumption tags.
-- **Granular Filter Toggles**: Option to include or exclude *Moderate* and *Low* activity apps, as well as core system daemons.
-- **Blacklist Support**: Exclude designated utilities and background tools from energy monitoring.
+### 🛡️ Smart Charging Protection
+- **Target Limiting (50% – 100%)**: Set custom stopping limits (recommended 80%) to minimize cell voltage stress.
+- **Sailing Mode (Hysteresis)**: Allows charge to naturally settle within a customizable delta (e.g., 4%) before topping back up, avoiding harmful micro-cycles.
+- **One-Click Top Up**: Rapidly charges to 100% on demand prior to mobile sessions, then automatically restores your previous limit.
+- **Thermal Safety Cutoff**: Suspends charging automatically when pack thermals exceed a configured threshold (32°C to 45°C).
+- **Direct Battery Mode**: Temporarily pause power delivery to run on internal battery while physically connected to AC.
 
-### 4. Refined Menu Bar Display
-- **Multiple Icon Styles**:
-  - **Capsule Pill**: Displays current charge percentage directly inside the battery enclosure with live AC bolt indicators.
-  - **Classic Battery**: Native-proportioned battery gauge with charging bolt overlay.
-  - **Minimal Bolt**: Compact status indicator.
-- **Flexible Accompanying Readouts**: Combine icon display with numeric percentages, signed wattage (`+24.5 W` / `-5.2 W`), or sensor temperatures.
-- **Colorized Status Accents**: Optional state-based tinting (Charging Green, Limit Blue, Low-Power Red) or strict native monochrome.
+### 📊 Stable Energy Impact Panel
+- **Zero-Jitter Fixed Layout**: The process monitor occupies an exact 76 pt vertical frame, ensuring popover menus never resize or jump during background scans.
+- **Informative Empty State**: Displays a reassuring status card (*"No high energy apps · Process consumption normal"*) when running software stays within baseline CPU limits.
+- **Adjustable Sensitivity**: Fine-tune custom thresholds for *High* and *Very High* consumption categories.
+- **Process Filters**: Toggle inclusion of moderate activity, background daemons, or define an app blacklist.
 
-### 5. Detailed Hardware Diagnostics
-- **Comprehensive Metrics Grid**: Uniformly aligned diagnostic cards monitoring:
-  - Battery Health Percentage (`CurrentMaxCapacity` vs `DesignCapacity`).
-  - Total Recharging Cycle Count.
-  - Multi-sensor Battery Pack Temperature (°C).
-  - Terminal Voltage (V) & Instant Amperage (mA).
-  - Net Battery Wattage & Mac System Consumption.
+### 🎨 Menu Bar Customization
+- **Icon Styles**:
+  - **Capsule Pill**: Displays battery level percentage inside the battery shape, accompanied by live lightning indicators on AC.
+  - **Classic Battery**: Traditional proportional fill bar with embedded vector charging indicator.
+  - **Minimal Symbol**: Compact bolt indicator for minimal status bars.
+- **Status Readouts**: Pair icons with text labels displaying numeric percent, signed wattage (`+24.5 W` / `-5.6 W`), or pack temperature.
+- **Colorized Accents**: Optional native green/blue/red state highlights or clean monochrome.
 
 ---
 
-## 🔬 Telemetry & Hardware Math
+## 🔬 Engineering & Architecture
 
-VoltControl interfaces directly with macOS kernel power services without relying on inaccurate shell wrappers or polling lags:
+### Power Telemetry Pipeline
 
-```mermaid
-flowchart LR
-    A["DC-In Adapter (PDTR)"] -->|Input Watts| B{"Power Controller"}
-    B -->|System Load (PSTR)| C["MacBook Hardware"]
-    B -->|Battery Power (SBAP)| D["Smart Battery Pack"]
+VoltControl uses a dual-source telemetry architecture for zero-latency accuracy:
+
+```
+┌─────────────────────────────────┐
+│     AppleSmartBattery (IOKit)   │───► [IOPSNotification Source] ───► Instant AC State
+└─────────────────────────────────┘
+┌─────────────────────────────────┐
+│        AppleSMC Kernel          │───► [PDTR: DC-In Watts]      ───► Adapter Power
+│                                 │───► [SBAP: Signed Battery W]  ───► Cell Charge/Discharge
+│                                 │───► [PSTR: System Total W]    ───► MacBook Net Load
+└─────────────────────────────────┘
 ```
 
-1. **AppleSMC Telemetry**: Reads raw IEEE-754 4-byte floating-point registers:
-   - `PDTR` — DC-In Adapter Total Power (Watts).
-   - `SBAP` — Smart Battery Average Power (+W on battery discharge, -W when charging).
-   - `PSTR` — System Total Load.
-2. **IOKit Kernel Services**:
-   - Queries `AppleSmartBattery` & `AppleSmartBatteryPack` for internal design thresholds, gas-gauge telemetry, and raw pack thermals.
-   - Attaches an asynchronous `IOPSNotificationCreateRunLoopSource` callback to `CFRunLoopGetMain()`, ensuring zero-latency detection of adapter connection and disconnection events.
+- **Instantaneous State Detection**: Leverages `IOPSNotificationCreateRunLoopSource` attached to `CFRunLoopGetMain()`, ensuring zero latency when plugging or unplugging adapters.
+- **SMC Float Decoder**: Reads raw IEEE-754 4-byte values directly from `AppleSMC`, eliminating inaccurate shell approximations.
+- **Integer Sign Safety**: Employs signed 64-bit integer bit-pattern reconstruction to guard against two's-complement overflow on 64-bit IOKit telemetry keys.
+
+---
+
+## ⚙️ Configuration Guide
+
+The Settings window (`⌘,`) organizes configuration into dedicated sections:
+
+1. **General**: Launch at login registration (`SMAppService`), sensor sampling frequency (1–10s), popover action behavior.
+2. **Charging**: Target charge limit slider, sailing delta configuration, temperature cutoff controls.
+3. **Energy**: CPU percentage threshold sliders, system process inclusion, moderate/low consumption toggles, process ignore list.
+4. **Menu**: Granular visibility switches for remaining time, elapsed time, power distribution block, and process monitoring.
+5. **Icon**: Menu bar style selector, readout mode, and preview canvas.
+6. **Diagnostics**: Uniform 2x3 grid displaying cycle count, pack thermals, voltage, amperage, net battery wattage, and system draw.
+7. **Notifications**: System alerts for limit reached, full top-up completion, thermal warning, and low battery.
+8. **SMC Controller**: Hardware register access verification and privileged helper status.
+9. **About**: Version information, driver status, and architecture overview.
 
 ---
 
 ## 📦 Installation
 
-### Prebuilt Binary (Recommended)
+### Prebuilt Binary
 
-1. Download the latest release archive (`VoltControl-v1.0.0.zip`) from [GitHub Releases](https://github.com/banzaez/volt-control/releases/latest).
-2. Extract the archive and drag **`VoltControl.app`** into your **`/Applications`** folder.
-3. Launch **VoltControl**.
-
-> [!NOTE]
-> VoltControl functions as an accessory status bar application without docking clutter. Access preferences at any time by clicking the menu bar icon and selecting **Settings…** (`⌘,`).
+1. Download **`VoltControl-v1.0.0.zip`** from [GitHub Releases](https://github.com/banzaez/volt-control/releases/latest).
+2. Decompress the archive and place **`VoltControl.app`** in your `/Applications` directory.
+3. Open the application. Access preferences at any time from the status item menu (`⌘,`).
 
 ---
 
-## 🛠 Building from Source
+## 🛠 Building
 
-### Prerequisites
-- macOS 14.0 (Sonoma) or newer.
-- Xcode 15.0+ or Command Line Tools with Swift 6.0+.
-
-### Build & Package
+### Requirements
+- macOS 14.0 (Sonoma) or later
+- Swift 6.0+ toolchain / Xcode 15.0+
 
 ```bash
-# Clone the repository
+# Clone repository
 git clone https://github.com/banzaez/volt-control.git
 cd volt-control
 
-# Run the release build & packaging script
-chmod +x ./build_app.sh
+# Build release bundle
 ./build_app.sh
 
-# Launch the newly compiled application
+# Run
 open VoltControl.app
 ```
 
-The `./build_app.sh` script automates:
-- Release compilation via Swift Package Manager (`swift build -c release`).
-- Creation of the macOS bundle structure (`VoltControl.app`).
-- Programmatic vector rendering of the custom Blue Lego Brick icon into multi-resolution `AppIcon.icns`.
-- Embedding of bundle metadata (`Info.plist`) and ad-hoc code signature generation.
-
----
-
-## 🧪 Testing
-
-Execute the native Swift Testing suite:
-
-```bash
-swift test
-```
-
----
-
-## 📄 License
-
-VoltControl is open-source software licensed under the [MIT License](LICENSE).
+The `./build_app.sh` script compiles the release binary via SwiftPM, constructs the application bundle layout, dynamically renders the custom vector app icon into `AppIcon.icns`, and applies an ad-hoc code signature.
