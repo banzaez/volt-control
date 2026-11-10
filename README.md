@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/app-icon.png" width="128" height="128" alt="VoltControl App Icon" />
+
 # VoltControl ⚡
 
 **A lightweight, native macOS Menu Bar application for real-time power analytics, intelligent battery charging control, and high-energy process monitoring on Apple Silicon & Intel MacBooks.**
