@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/banzaez/volt-control/releases/latest"><img src="https://img.shields.io/badge/Release-v1.0.0-0A84FF?style=flat-square&logo=apple" alt="Release v1.0.0" /></a>
+  <a href="https://github.com/banzaez/volt-control/releases/latest"><img src="https://img.shields.io/badge/Release-v1.1.0-0A84FF?style=flat-square&logo=apple" alt="Release v1.1.0" /></a>
   <img src="https://img.shields.io/badge/macOS-14.0%2B-0078D7?style=flat-square&logo=apple&logoColor=white" alt="macOS 14.0+" />
   <img src="https://img.shields.io/badge/Swift-6.4-F05138?style=flat-square&logo=swift&logoColor=white" alt="Swift 6.4" />
   <img src="https://img.shields.io/badge/Architecture-Apple%20Silicon%20(arm64)-success?style=flat-square" alt="Apple Silicon arm64" />
@@ -119,7 +119,7 @@ The Settings window (`⌘,`) organizes configuration into dedicated sections:
 
 ### Prebuilt Binary
 
-1. Download **`VoltControl-v1.0.0-macOS.zip`** from [GitHub Releases](https://github.com/banzaez/volt-control/releases/latest).
+1. Download **`VoltControl-v1.1.0-macOS.zip`** from [GitHub Releases](https://github.com/banzaez/volt-control/releases/latest).
 2. Decompress the archive and move **`VoltControl.app`** to `/Applications`.
 3. Open **VoltControl** from `/Applications`.
 4. To enable hardware SMC control, click **«Включить»** in the popover (or Settings → SMC) and allow **VoltControl** in **System Settings → General → Login Items**.
