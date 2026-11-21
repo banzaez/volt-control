@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/teaser.png" alt="VoltControl — Power Analytics & Smart Battery Control for Apple Silicon" width="100%" />
+  <img src="assets/hero-banner.png" alt="VoltControl — Power Analytics & Smart Battery Control for Apple Silicon" width="100%" />
 </p>
 
 <p align="center">
