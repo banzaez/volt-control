@@ -15,8 +15,8 @@ public struct MainPopoverView: View {
             // MARK: - 1. Верхний блок сводки
             headerSummarySection
                 .padding(.horizontal, 14)
-                .padding(.top, 12)
-                .padding(.bottom, 10)
+                .padding(.top, 16)
+                .padding(.bottom, 14)
 
             menuDivider
 
@@ -24,7 +24,7 @@ public struct MainPopoverView: View {
             if settings.menuShowPowerDistribution {
                 powerDistributionSection
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 14)
 
                 menuDivider
             }
@@ -33,7 +33,7 @@ public struct MainPopoverView: View {
             if settings.menuShowHighEnergyApps {
                 highEnergyAppsSection
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 14)
 
                 menuDivider
             }
@@ -44,7 +44,7 @@ public struct MainPopoverView: View {
             // MARK: - 5. Пункты меню
             let canDisableAdapter = helper.capabilities?.canDisableAdapter ?? true
 
-            VStack(spacing: 1) {
+            VStack(spacing: 3) {
                 NativeMenuItem(
                     title: "Зарядить полностью",
                     checkmark: settings.isTopUpActive,
@@ -66,7 +66,7 @@ public struct MainPopoverView: View {
 
                 menuDivider
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
+                    .padding(.vertical, 5)
 
                 NativeMenuItem(
                     title: "Настройки...",
@@ -79,7 +79,7 @@ public struct MainPopoverView: View {
 
                 menuDivider
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
+                    .padding(.vertical, 5)
 
                 NativeMenuItem(
                     title: "Завершить VoltControl",
@@ -91,8 +91,8 @@ public struct MainPopoverView: View {
                 )
             }
             .padding(.horizontal, 6)
-            .padding(.top, 4)
-            .padding(.bottom, 6)
+            .padding(.top, 6)
+            .padding(.bottom, 8)
         }
         .frame(width: 304)
         .background(VisualEffectBlur(material: .popover, blendingMode: .behindWindow))
@@ -172,7 +172,7 @@ public struct MainPopoverView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(color)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.primary)
@@ -191,19 +191,18 @@ public struct MainPopoverView: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(color.opacity(0.12))
         )
         .padding(.horizontal, 10)
-        .padding(.top, 4)
-        .padding(.bottom, 2)
+        .padding(.vertical, 6)
     }
 
     // MARK: - 1. Header Summary
     private var headerSummarySection: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Аккумулятор")
                     .font(.system(size: 13, weight: .bold))
@@ -245,7 +244,7 @@ public struct MainPopoverView: View {
                 .font(.system(size: 10.5))
                 .foregroundStyle(.tertiary)
                 .monospacedDigit()
-                .padding(.top, 2)
+                .padding(.top, 4)
             }
         }
     }
@@ -273,7 +272,7 @@ public struct MainPopoverView: View {
         let battDischargeWatts = max(0.1, abs(info.batteryPowerWatts))
         let adapterWatts = max(info.adapterPowerWatts, sysWatts + battChargeWatts)
 
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: 11) {
             HStack {
                 Text("Распределение питания")
                     .font(.system(size: 12))
@@ -354,7 +353,7 @@ public struct MainPopoverView: View {
     }
 
     private func powerPill(icon: String, watts: String, caption: String) -> some View {
-        VStack(spacing: 2.5) {
+        VStack(spacing: 4) {
             HStack(spacing: 3.5) {
                 Image(systemName: icon)
                     .font(.system(size: 10))
@@ -368,7 +367,7 @@ public struct MainPopoverView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 5)
-            .padding(.vertical, 5)
+            .padding(.vertical, 6)
             .background(
                 Capsule(style: .continuous)
                     .fill(Color.primary.opacity(0.06))
@@ -383,7 +382,7 @@ public struct MainPopoverView: View {
 
     // MARK: - 3. Fixed 3-App Section
     private var highEnergyAppsSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Приложения с высоким\nэнергопотреблением")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
@@ -391,10 +390,10 @@ public struct MainPopoverView: View {
 
             Group {
                 if energyService.hasRealApps {
-                    VStack(spacing: 2) {
+                    VStack(spacing: 5) {
                         ForEach(Array(energyService.topThreeSlots.prefix(3).enumerated()), id: \.offset) { _, app in
                             fixedAppRow(app: app)
-                                .frame(height: 24)
+                                .frame(height: 26)
                         }
                     }
                 } else {
@@ -409,7 +408,7 @@ public struct MainPopoverView: View {
                                 .foregroundStyle(Color.blue)
                         }
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: 3) {
                             Text("Нет энергоёмких приложений")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(.primary)
@@ -433,7 +432,7 @@ public struct MainPopoverView: View {
                     )
                 }
             }
-            .frame(height: 24 * 3 + 2 * 2)
+            .frame(height: 26 * 3 + 5 * 2)
         }
     }
 
@@ -550,7 +549,7 @@ public struct NativeMenuItem: View {
                 }
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 4.5)
+            .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
                     .fill(isHovered && !isDisabled ? Color.accentColor : Color.clear)
