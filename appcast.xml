@@ -3,6 +3,15 @@
     <channel>
         <title>VoltControl</title>
         <item>
+            <title>1.1.1</title>
+            <pubDate>Sat, 21 Nov 2026 21:41:01 +0200</pubDate>
+            <sparkle:version>3</sparkle:version>
+            <sparkle:shortVersionString>1.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/banzaez/volt-control/releases/download/v1.1.1/VoltControl-v1.1.1-macOS.zip" length="2103690" type="application/octet-stream" sparkle:edSignature="vUNRymC6C4u0ZWf82cOo8Qy37r+6CGw5F0d3stNokaoOsbGoeY1/eIkpdAz7GayC1FXBiS2CeJRN7l6npQ25Ag=="/>
+        </item>
+        <item>
             <title>1.1.0</title>
             <pubDate>Sat, 21 Nov 2026 21:23:57 +0200</pubDate>
             <sparkle:version>2</sparkle:version>
