@@ -16,9 +16,23 @@ let package = Package(
             targets: ["VoltControlHelper"]
         )
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")
+    ],
     targets: [
+        .target(
+            name: "VoltCore",
+            path: "Sources/VoltCore",
+            swiftSettings: [
+                .enableUpcomingFeature("ApproachableConcurrency")
+            ]
+        ),
         .executableTarget(
             name: "VoltControl",
+            dependencies: [
+                "VoltCore",
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
             path: "Sources/VoltControl",
             swiftSettings: [
                 .enableUpcomingFeature("ApproachableConcurrency")
@@ -26,11 +40,20 @@ let package = Package(
         ),
         .executableTarget(
             name: "VoltControlHelper",
-            path: "Sources/VoltControlHelper"
+            dependencies: ["VoltCore"],
+            path: "Sources/VoltControlHelper",
+            swiftSettings: [
+                .enableUpcomingFeature("ApproachableConcurrency")
+            ]
+        ),
+        .testTarget(
+            name: "VoltCoreTests",
+            dependencies: ["VoltCore"],
+            path: "Tests/VoltCoreTests"
         ),
         .testTarget(
             name: "VoltControlTests",
-            dependencies: ["VoltControl"],
+            dependencies: ["VoltControl", "VoltCore"],
             path: "Tests/VoltControlTests"
         )
     ]

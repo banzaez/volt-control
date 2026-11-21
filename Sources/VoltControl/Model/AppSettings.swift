@@ -51,264 +51,217 @@ public enum MenuBarIconStyle: String, CaseIterable, Identifiable, Sendable {
 public final class AppSettings {
     public static let shared = AppSettings()
 
+    @ObservationIgnored private let defaults: UserDefaults
+
     // MARK: - 1. Основные (General)
     public var launchAtLogin: Bool {
         didSet {
-            UserDefaults.standard.set(launchAtLogin, forKey: "launchAtLogin")
+            persist(launchAtLogin, forKey: "launchAtLogin")
             updateLaunchAtLogin()
         }
     }
 
     public var pollingIntervalSeconds: Double {
-        didSet {
-            UserDefaults.standard.set(pollingIntervalSeconds, forKey: "pollingIntervalSeconds")
-            BatteryMonitor.shared.rescheduleTimer()
-        }
+        didSet { persist(pollingIntervalSeconds, forKey: "pollingIntervalSeconds") }
     }
 
     public var keepMenuOpenOnAction: Bool {
-        didSet {
-            UserDefaults.standard.set(keepMenuOpenOnAction, forKey: "keepMenuOpenOnAction")
-        }
+        didSet { persist(keepMenuOpenOnAction, forKey: "keepMenuOpenOnAction") }
+    }
+
+    public var autoCheckUpdates: Bool {
+        didSet { persist(autoCheckUpdates, forKey: "autoCheckUpdates") }
     }
 
     // MARK: - 2. Зарядка (Charging)
     public var chargeLimit: Int {
-        didSet {
-            UserDefaults.standard.set(chargeLimit, forKey: "chargeLimit")
-        }
+        didSet { persist(chargeLimit, forKey: "chargeLimit") }
     }
 
     public var isTopUpActive: Bool {
-        didSet {
-            UserDefaults.standard.set(isTopUpActive, forKey: "isTopUpActive")
-        }
+        didSet { persist(isTopUpActive, forKey: "isTopUpActive") }
     }
 
     public var autoResetTopUp: Bool {
-        didSet {
-            UserDefaults.standard.set(autoResetTopUp, forKey: "autoResetTopUp")
-        }
+        didSet { persist(autoResetTopUp, forKey: "autoResetTopUp") }
     }
 
     public var isChargingPaused: Bool {
-        didSet {
-            UserDefaults.standard.set(isChargingPaused, forKey: "isChargingPaused")
-        }
+        didSet { persist(isChargingPaused, forKey: "isChargingPaused") }
     }
 
     public var sailingModeEnabled: Bool {
-        didSet {
-            UserDefaults.standard.set(sailingModeEnabled, forKey: "sailingModeEnabled")
-        }
+        didSet { persist(sailingModeEnabled, forKey: "sailingModeEnabled") }
     }
 
     public var sailingDelta: Int {
-        didSet {
-            UserDefaults.standard.set(sailingDelta, forKey: "sailingDelta")
-        }
+        didSet { persist(sailingDelta, forKey: "sailingDelta") }
     }
 
     public var tempProtectionEnabled: Bool {
-        didSet {
-            UserDefaults.standard.set(tempProtectionEnabled, forKey: "tempProtectionEnabled")
-        }
+        didSet { persist(tempProtectionEnabled, forKey: "tempProtectionEnabled") }
     }
 
     public var maxAllowedTempCelsius: Double {
-        didSet {
-            UserDefaults.standard.set(maxAllowedTempCelsius, forKey: "maxAllowedTempCelsius")
-        }
+        didSet { persist(maxAllowedTempCelsius, forKey: "maxAllowedTempCelsius") }
     }
 
     // MARK: - 3. Энергосбережение и Процессы (Energy & Apps)
     public var highEnergyThresholdCPU: Double {
-        didSet {
-            UserDefaults.standard.set(highEnergyThresholdCPU, forKey: "highEnergyThresholdCPU")
-        }
+        didSet { persist(highEnergyThresholdCPU, forKey: "highEnergyThresholdCPU") }
     }
 
     public var veryHighEnergyThresholdCPU: Double {
-        didSet {
-            UserDefaults.standard.set(veryHighEnergyThresholdCPU, forKey: "veryHighEnergyThresholdCPU")
-        }
+        didSet { persist(veryHighEnergyThresholdCPU, forKey: "veryHighEnergyThresholdCPU") }
     }
 
     public var includeSystemProcesses: Bool {
-        didSet {
-            UserDefaults.standard.set(includeSystemProcesses, forKey: "includeSystemProcesses")
-        }
+        didSet { persist(includeSystemProcesses, forKey: "includeSystemProcesses") }
     }
 
     public var showCPUPercentageInMenu: Bool {
-        didSet {
-            UserDefaults.standard.set(showCPUPercentageInMenu, forKey: "showCPUPercentageInMenu")
-        }
+        didSet { persist(showCPUPercentageInMenu, forKey: "showCPUPercentageInMenu") }
     }
 
     public var processScanIntervalSeconds: Double {
-        didSet {
-            UserDefaults.standard.set(processScanIntervalSeconds, forKey: "processScanIntervalSeconds")
-        }
+        didSet { persist(processScanIntervalSeconds, forKey: "processScanIntervalSeconds") }
     }
 
     public var ignoredAppNames: String {
-        didSet {
-            UserDefaults.standard.set(ignoredAppNames, forKey: "ignoredAppNames")
-        }
+        didSet { persist(ignoredAppNames, forKey: "ignoredAppNames") }
     }
 
     public var showModerateEnergyApps: Bool {
-        didSet {
-            UserDefaults.standard.set(showModerateEnergyApps, forKey: "showModerateEnergyApps")
-        }
+        didSet { persist(showModerateEnergyApps, forKey: "showModerateEnergyApps") }
     }
 
     public var showLowEnergyApps: Bool {
-        didSet {
-            UserDefaults.standard.set(showLowEnergyApps, forKey: "showLowEnergyApps")
-        }
+        didSet { persist(showLowEnergyApps, forKey: "showLowEnergyApps") }
     }
 
     // MARK: - 4. Меню (Menu Customization)
     public var menuShowTimeRemaining: Bool {
-        didSet {
-            UserDefaults.standard.set(menuShowTimeRemaining, forKey: "menuShowTimeRemaining")
-        }
+        didSet { persist(menuShowTimeRemaining, forKey: "menuShowTimeRemaining") }
     }
 
     public var menuShowElapsedTime: Bool {
-        didSet {
-            UserDefaults.standard.set(menuShowElapsedTime, forKey: "menuShowElapsedTime")
-        }
+        didSet { persist(menuShowElapsedTime, forKey: "menuShowElapsedTime") }
     }
 
     public var menuShowAppMode: Bool {
-        didSet {
-            UserDefaults.standard.set(menuShowAppMode, forKey: "menuShowAppMode")
-        }
+        didSet { persist(menuShowAppMode, forKey: "menuShowAppMode") }
     }
 
     public var menuShowCompactTelemetry: Bool {
-        didSet {
-            UserDefaults.standard.set(menuShowCompactTelemetry, forKey: "menuShowCompactTelemetry")
-        }
+        didSet { persist(menuShowCompactTelemetry, forKey: "menuShowCompactTelemetry") }
     }
 
     public var menuShowPowerDistribution: Bool {
-        didSet {
-            UserDefaults.standard.set(menuShowPowerDistribution, forKey: "menuShowPowerDistribution")
-        }
+        didSet { persist(menuShowPowerDistribution, forKey: "menuShowPowerDistribution") }
     }
 
     public var menuShowPowerSplitBar: Bool {
-        didSet {
-            UserDefaults.standard.set(menuShowPowerSplitBar, forKey: "menuShowPowerSplitBar")
-        }
+        didSet { persist(menuShowPowerSplitBar, forKey: "menuShowPowerSplitBar") }
     }
 
     public var menuShowHighEnergyApps: Bool {
-        didSet {
-            UserDefaults.standard.set(menuShowHighEnergyApps, forKey: "menuShowHighEnergyApps")
-        }
+        didSet { persist(menuShowHighEnergyApps, forKey: "menuShowHighEnergyApps") }
     }
 
     // MARK: - 5. Значок (Menu Bar Icon)
     public var menuBarIconStyle: MenuBarIconStyle {
-        didSet {
-            UserDefaults.standard.set(menuBarIconStyle.rawValue, forKey: "menuBarIconStyle")
-        }
+        didSet { persist(menuBarIconStyle.rawValue, forKey: "menuBarIconStyle") }
     }
 
     public var menuBarDisplayMode: MenuBarDisplayMode {
-        didSet {
-            UserDefaults.standard.set(menuBarDisplayMode.rawValue, forKey: "menuBarDisplayMode")
-        }
+        didSet { persist(menuBarDisplayMode.rawValue, forKey: "menuBarDisplayMode") }
     }
 
     public var menuBarColorizedIcon: Bool {
-        didSet {
-            UserDefaults.standard.set(menuBarColorizedIcon, forKey: "menuBarColorizedIcon")
-        }
+        didSet { persist(menuBarColorizedIcon, forKey: "menuBarColorizedIcon") }
     }
 
     // MARK: - 6. Уведомления (Notifications)
     public var notifyOnLimitReached: Bool {
-        didSet {
-            UserDefaults.standard.set(notifyOnLimitReached, forKey: "notifyOnLimitReached")
-        }
+        didSet { persist(notifyOnLimitReached, forKey: "notifyOnLimitReached") }
     }
 
     public var notifyOnFull: Bool {
-        didSet {
-            UserDefaults.standard.set(notifyOnFull, forKey: "notifyOnFull")
-        }
+        didSet { persist(notifyOnFull, forKey: "notifyOnFull") }
     }
 
     public var notifyOnOverheat: Bool {
-        didSet {
-            UserDefaults.standard.set(notifyOnOverheat, forKey: "notifyOnOverheat")
-        }
+        didSet { persist(notifyOnOverheat, forKey: "notifyOnOverheat") }
     }
 
     public var notifyOnLowBattery: Bool {
-        didSet {
-            UserDefaults.standard.set(notifyOnLowBattery, forKey: "notifyOnLowBattery")
-        }
+        didSet { persist(notifyOnLowBattery, forKey: "notifyOnLowBattery") }
     }
 
     public var lowBatteryThreshold: Int {
-        didSet {
-            UserDefaults.standard.set(lowBatteryThreshold, forKey: "lowBatteryThreshold")
-        }
+        didSet { persist(lowBatteryThreshold, forKey: "lowBatteryThreshold") }
     }
 
-    private init() {
-        let d = UserDefaults.standard
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
 
-        self.launchAtLogin = d.bool(forKey: "launchAtLogin")
-        self.pollingIntervalSeconds = d.object(forKey: "pollingIntervalSeconds") != nil ? d.double(forKey: "pollingIntervalSeconds") : 2.0
-        self.keepMenuOpenOnAction = d.object(forKey: "keepMenuOpenOnAction") != nil ? d.bool(forKey: "keepMenuOpenOnAction") : true
+        self.launchAtLogin = Self.load(defaults, "launchAtLogin", default: false)
+        self.pollingIntervalSeconds = Self.load(defaults, "pollingIntervalSeconds", default: 2.0)
+        self.keepMenuOpenOnAction = Self.load(defaults, "keepMenuOpenOnAction", default: true)
+        self.autoCheckUpdates = Self.load(defaults, "autoCheckUpdates", default: true)
 
-        self.chargeLimit = d.object(forKey: "chargeLimit") != nil ? d.integer(forKey: "chargeLimit") : 80
-        self.isTopUpActive = d.bool(forKey: "isTopUpActive")
-        self.autoResetTopUp = d.object(forKey: "autoResetTopUp") != nil ? d.bool(forKey: "autoResetTopUp") : true
-        self.isChargingPaused = d.bool(forKey: "isChargingPaused")
-        self.sailingModeEnabled = d.object(forKey: "sailingModeEnabled") != nil ? d.bool(forKey: "sailingModeEnabled") : true
-        self.sailingDelta = d.object(forKey: "sailingDelta") != nil ? d.integer(forKey: "sailingDelta") : 4
-        self.tempProtectionEnabled = d.object(forKey: "tempProtectionEnabled") != nil ? d.bool(forKey: "tempProtectionEnabled") : true
-        self.maxAllowedTempCelsius = d.object(forKey: "maxAllowedTempCelsius") != nil ? d.double(forKey: "maxAllowedTempCelsius") : 38.0
+        self.chargeLimit = Self.load(defaults, "chargeLimit", default: 80)
+        self.isTopUpActive = Self.load(defaults, "isTopUpActive", default: false)
+        self.autoResetTopUp = Self.load(defaults, "autoResetTopUp", default: true)
+        self.isChargingPaused = Self.load(defaults, "isChargingPaused", default: false)
+        self.sailingModeEnabled = Self.load(defaults, "sailingModeEnabled", default: true)
+        self.sailingDelta = Self.load(defaults, "sailingDelta", default: 4)
+        self.tempProtectionEnabled = Self.load(defaults, "tempProtectionEnabled", default: true)
+        self.maxAllowedTempCelsius = Self.load(defaults, "maxAllowedTempCelsius", default: 38.0)
 
-        self.highEnergyThresholdCPU = d.object(forKey: "highEnergyThresholdCPU") != nil ? d.double(forKey: "highEnergyThresholdCPU") : 3.0
-        self.veryHighEnergyThresholdCPU = d.object(forKey: "veryHighEnergyThresholdCPU") != nil ? d.double(forKey: "veryHighEnergyThresholdCPU") : 20.0
-        self.includeSystemProcesses = d.object(forKey: "includeSystemProcesses") != nil ? d.bool(forKey: "includeSystemProcesses") : false
-        self.showCPUPercentageInMenu = d.object(forKey: "showCPUPercentageInMenu") != nil ? d.bool(forKey: "showCPUPercentageInMenu") : true
-        self.processScanIntervalSeconds = d.object(forKey: "processScanIntervalSeconds") != nil ? d.double(forKey: "processScanIntervalSeconds") : 5.0
-        self.ignoredAppNames = d.string(forKey: "ignoredAppNames") ?? "Finder, Dock"
-        self.showModerateEnergyApps = d.object(forKey: "showModerateEnergyApps") != nil ? d.bool(forKey: "showModerateEnergyApps") : true
-        self.showLowEnergyApps = d.object(forKey: "showLowEnergyApps") != nil ? d.bool(forKey: "showLowEnergyApps") : false
+        self.highEnergyThresholdCPU = Self.load(defaults, "highEnergyThresholdCPU", default: 3.0)
+        self.veryHighEnergyThresholdCPU = Self.load(defaults, "veryHighEnergyThresholdCPU", default: 20.0)
+        self.includeSystemProcesses = Self.load(defaults, "includeSystemProcesses", default: false)
+        self.showCPUPercentageInMenu = Self.load(defaults, "showCPUPercentageInMenu", default: true)
+        self.processScanIntervalSeconds = Self.load(defaults, "processScanIntervalSeconds", default: 5.0)
+        self.ignoredAppNames = Self.load(defaults, "ignoredAppNames", default: "Finder, Dock")
+        self.showModerateEnergyApps = Self.load(defaults, "showModerateEnergyApps", default: true)
+        self.showLowEnergyApps = Self.load(defaults, "showLowEnergyApps", default: false)
 
-        self.menuShowTimeRemaining = d.object(forKey: "menuShowTimeRemaining") != nil ? d.bool(forKey: "menuShowTimeRemaining") : true
-        self.menuShowElapsedTime = d.object(forKey: "menuShowElapsedTime") != nil ? d.bool(forKey: "menuShowElapsedTime") : true
-        self.menuShowAppMode = d.object(forKey: "menuShowAppMode") != nil ? d.bool(forKey: "menuShowAppMode") : true
-        self.menuShowCompactTelemetry = d.object(forKey: "menuShowCompactTelemetry") != nil ? d.bool(forKey: "menuShowCompactTelemetry") : true
-        self.menuShowPowerDistribution = d.object(forKey: "menuShowPowerDistribution") != nil ? d.bool(forKey: "menuShowPowerDistribution") : true
-        self.menuShowPowerSplitBar = d.object(forKey: "menuShowPowerSplitBar") != nil ? d.bool(forKey: "menuShowPowerSplitBar") : true
-        self.menuShowHighEnergyApps = d.object(forKey: "menuShowHighEnergyApps") != nil ? d.bool(forKey: "menuShowHighEnergyApps") : true
+        self.menuShowTimeRemaining = Self.load(defaults, "menuShowTimeRemaining", default: true)
+        self.menuShowElapsedTime = Self.load(defaults, "menuShowElapsedTime", default: true)
+        self.menuShowAppMode = Self.load(defaults, "menuShowAppMode", default: true)
+        self.menuShowCompactTelemetry = Self.load(defaults, "menuShowCompactTelemetry", default: true)
+        self.menuShowPowerDistribution = Self.load(defaults, "menuShowPowerDistribution", default: true)
+        self.menuShowPowerSplitBar = Self.load(defaults, "menuShowPowerSplitBar", default: true)
+        self.menuShowHighEnergyApps = Self.load(defaults, "menuShowHighEnergyApps", default: true)
 
-        let styleRaw = d.string(forKey: "menuBarIconStyle") ?? MenuBarIconStyle.glassPill.rawValue
+        let styleRaw = Self.load(defaults, "menuBarIconStyle", default: MenuBarIconStyle.glassPill.rawValue)
         self.menuBarIconStyle = MenuBarIconStyle(rawValue: styleRaw) ?? .glassPill
 
-        let modeRaw = d.string(forKey: "menuBarDisplayMode") ?? MenuBarDisplayMode.iconOnly.rawValue
+        let modeRaw = Self.load(defaults, "menuBarDisplayMode", default: MenuBarDisplayMode.iconOnly.rawValue)
         self.menuBarDisplayMode = MenuBarDisplayMode(rawValue: modeRaw) ?? .iconOnly
 
-        self.menuBarColorizedIcon = d.object(forKey: "menuBarColorizedIcon") != nil ? d.bool(forKey: "menuBarColorizedIcon") : false
+        self.menuBarColorizedIcon = Self.load(defaults, "menuBarColorizedIcon", default: false)
 
-        self.notifyOnLimitReached = d.object(forKey: "notifyOnLimitReached") != nil ? d.bool(forKey: "notifyOnLimitReached") : true
-        self.notifyOnFull = d.object(forKey: "notifyOnFull") != nil ? d.bool(forKey: "notifyOnFull") : true
-        self.notifyOnOverheat = d.object(forKey: "notifyOnOverheat") != nil ? d.bool(forKey: "notifyOnOverheat") : true
-        self.notifyOnLowBattery = d.object(forKey: "notifyOnLowBattery") != nil ? d.bool(forKey: "notifyOnLowBattery") : true
-        self.lowBatteryThreshold = d.object(forKey: "lowBatteryThreshold") != nil ? d.integer(forKey: "lowBatteryThreshold") : 20
+        self.notifyOnLimitReached = Self.load(defaults, "notifyOnLimitReached", default: true)
+        self.notifyOnFull = Self.load(defaults, "notifyOnFull", default: true)
+        self.notifyOnOverheat = Self.load(defaults, "notifyOnOverheat", default: true)
+        self.notifyOnLowBattery = Self.load(defaults, "notifyOnLowBattery", default: true)
+        self.lowBatteryThreshold = Self.load(defaults, "lowBatteryThreshold", default: 20)
+    }
+
+    private static func load<T>(_ defaults: UserDefaults, _ key: String, default defaultValue: T) -> T {
+        guard defaults.object(forKey: key) != nil else { return defaultValue }
+        if T.self == Bool.self, let val = defaults.bool(forKey: key) as? T { return val }
+        if T.self == Int.self, let val = defaults.integer(forKey: key) as? T { return val }
+        if T.self == Double.self, let val = defaults.double(forKey: key) as? T { return val }
+        if T.self == String.self, let val = defaults.string(forKey: key) as? T { return val }
+        return (defaults.object(forKey: key) as? T) ?? defaultValue
+    }
+
+    private func persist<T>(_ value: T, forKey key: String) {
+        defaults.set(value, forKey: key)
     }
 
     public func parsedIgnoredApps() -> Set<String> {

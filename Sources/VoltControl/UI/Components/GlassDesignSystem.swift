@@ -11,6 +11,31 @@ public enum AppIconGenerator {
         return img
     }
 
+    public static func pngData(size: CGFloat = 1024) -> Data? {
+        let px = Int(size)
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: px,
+            pixelsHigh: px,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else {
+            return nil
+        }
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        drawLegoBrickIcon(in: NSRect(x: 0, y: 0, width: size, height: size))
+        NSGraphicsContext.restoreGraphicsState()
+
+        return rep.representation(using: .png, properties: [:])
+    }
+
     public static func drawLegoBrickIcon(in rect: NSRect) {
         let s = min(rect.width, rect.height)
         let inset = s * 0.0625

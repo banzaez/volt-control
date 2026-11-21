@@ -5,6 +5,7 @@ public struct MainPopoverView: View {
     @Bindable var monitor = BatteryMonitor.shared
     @Bindable var settings = AppSettings.shared
     @Bindable var energyService = HighEnergyAppService.shared
+    @Bindable var helper = HelperClient.shared
 
     public let onOpenSettings: () -> Void
     public let onQuit: () -> Void
@@ -37,43 +38,11 @@ public struct MainPopoverView: View {
                 menuDivider
             }
 
-            // MARK: - 4. Пункты меню
-            if !SMCController.shared.isPrivileged && monitor.info.isACConnected {
-                HStack(spacing: 8) {
-                    Image(systemName: "lock.shield.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.orange)
+            // MARK: - 4. Баннер статуса демона SMC
+            statusBannerIfNeeded
 
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Управление зарядкой SMC")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.primary)
-                        Text("Требуется активация хелпера")
-                            .font(.system(size: 9.5))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Button("Включить") {
-                        _ = SMCController.shared.installPrivilegedHelper()
-                        monitor.fetchSnapshot()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.mini)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.orange.opacity(0.12))
-                )
-                .padding(.horizontal, 10)
-                .padding(.top, 4)
-                .padding(.bottom, 2)
-
-                menuDivider
-            }
+            // MARK: - 5. Пункты меню
+            let canDisableAdapter = helper.capabilities?.canDisableAdapter ?? true
 
             VStack(spacing: 1) {
                 NativeMenuItem(
@@ -88,6 +57,7 @@ public struct MainPopoverView: View {
                 NativeMenuItem(
                     title: "Работать от батареи",
                     checkmark: settings.isChargingPaused,
+                    isDisabled: !canDisableAdapter,
                     action: {
                         monitor.togglePause()
                         MenuBarController.shared.closePopoverIfNeeded()
@@ -101,6 +71,7 @@ public struct MainPopoverView: View {
                 NativeMenuItem(
                     title: "Настройки...",
                     shortcut: "⌘,",
+                    keyEquivalent: KeyEquivalent(","),
                     action: {
                         onOpenSettings()
                     }
@@ -113,6 +84,7 @@ public struct MainPopoverView: View {
                 NativeMenuItem(
                     title: "Завершить VoltControl",
                     shortcut: "⌘Q",
+                    keyEquivalent: KeyEquivalent("q"),
                     action: {
                         onQuit()
                     }
@@ -124,6 +96,109 @@ public struct MainPopoverView: View {
         }
         .frame(width: 304)
         .background(VisualEffectBlur(material: .popover, blendingMode: .behindWindow))
+    }
+
+    @ViewBuilder
+    private var statusBannerIfNeeded: some View {
+        switch helper.status {
+        case .notRegistered, .notFound:
+            bannerCard(
+                icon: "lock.shield.fill",
+                color: .orange,
+                title: "Управление зарядкой SMC",
+                subtitle: "Требуется включение системного демона",
+                buttonTitle: "Включить",
+                action: {
+                    helper.register()
+                    monitor.fetchSnapshot()
+                }
+            )
+            menuDivider
+        case .requiresApproval:
+            bannerCard(
+                icon: "gear.badge.checkmark",
+                color: .orange,
+                title: "Требуется разрешение",
+                subtitle: "Разрешите VoltControl в Объектах входа",
+                buttonTitle: "Настройки",
+                action: {
+                    helper.openSystemSettings()
+                }
+            )
+            menuDivider
+        case .error(let msg):
+            bannerCard(
+                icon: "exclamationmark.triangle.fill",
+                color: .red,
+                title: "Ошибка демона SMC",
+                subtitle: msg,
+                buttonTitle: "Повторить",
+                action: {
+                    helper.register()
+                }
+            )
+            menuDivider
+        case .enabled:
+            if case .unsupported = monitor.info.controlStatus {
+                let subtitleText: String = {
+                    if let sys = monitor.info.systemChargeLimit {
+                        return "Лимит обеспечивает macOS (\(sys)%)"
+                    }
+                    return "Ключи остановки зарядки недоступны"
+                }()
+                bannerCard(
+                    icon: "info.circle.fill",
+                    color: .blue,
+                    title: "Аппаратная остановка недоступна",
+                    subtitle: subtitleText,
+                    buttonTitle: nil,
+                    action: {}
+                )
+                menuDivider
+            }
+        }
+    }
+
+    private func bannerCard(
+        icon: String,
+        color: Color,
+        title: String,
+        subtitle: String,
+        buttonTitle: String?,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(color)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer()
+
+            if let buttonTitle {
+                Button(buttonTitle, action: action)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.mini)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(color.opacity(0.12))
+        )
+        .padding(.horizontal, 10)
+        .padding(.top, 4)
+        .padding(.bottom, 2)
     }
 
     // MARK: - 1. Header Summary
@@ -161,9 +236,9 @@ public struct MainPopoverView: View {
 
             if settings.menuShowCompactTelemetry {
                 HStack(spacing: 6) {
-                    Text(String(format: "Здоровье %.0f%%", monitor.info.healthPercentage))
+                    Text("Здоровье \(Formatting.percent(monitor.info.healthPercentage))")
                     Text("•")
-                    Text(String(format: "%.1f °C", monitor.info.temperatureCelsius).replacingOccurrences(of: ".", with: ","))
+                    Text(Formatting.celsius(monitor.info.temperatureCelsius))
                     Text("•")
                     Text("\(monitor.info.cycleCount) цикл.")
                 }
@@ -188,11 +263,11 @@ public struct MainPopoverView: View {
         }
     }
 
-    // MARK: - 2. Power Distribution (Точное распределение ватт от батареи и от адаптера)
+    // MARK: - 2. Power Distribution
     private var powerDistributionSection: some View {
         let info = monitor.info
         let isAC = info.isACConnected
-        let isChg = info.isCharging || (isAC && info.batteryPowerWatts > 0.25)
+        let isChg = info.isEffectivelyCharging
         let sysWatts = max(0.1, info.systemPowerWatts)
         let battChargeWatts = isChg ? max(0.0, info.batteryPowerWatts) : 0.0
         let battDischargeWatts = max(0.1, abs(info.batteryPowerWatts))
@@ -210,11 +285,10 @@ public struct MainPopoverView: View {
             }
 
             if !isAC {
-                // Работа от аккумулятора: [ 🔋 X,X Вт ] → [ 💻 X,X Вт ]
                 HStack(spacing: 8) {
                     powerPill(
                         icon: "battery.75",
-                        watts: formattedWatts(battDischargeWatts),
+                        watts: Formatting.watts(battDischargeWatts),
                         caption: "Из батареи"
                     )
 
@@ -224,16 +298,15 @@ public struct MainPopoverView: View {
 
                     powerPill(
                         icon: "laptopcomputer",
-                        watts: formattedWatts(sysWatts),
+                        watts: Formatting.watts(sysWatts),
                         caption: "Расход Mac"
                     )
                 }
             } else {
-                // Питание от адаптера: [ 🔌 Адаптер ] → [ 💻 На Mac ] + [ ⚡ В батарею ]
                 HStack(spacing: 5) {
                     powerPill(
                         icon: "powerplug.fill",
-                        watts: formattedWatts(adapterWatts),
+                        watts: Formatting.watts(adapterWatts),
                         caption: "Адаптер"
                     )
 
@@ -243,7 +316,7 @@ public struct MainPopoverView: View {
 
                     powerPill(
                         icon: "laptopcomputer",
-                        watts: formattedWatts(sysWatts),
+                        watts: Formatting.watts(sysWatts),
                         caption: "На Mac"
                     )
 
@@ -253,7 +326,7 @@ public struct MainPopoverView: View {
 
                     powerPill(
                         icon: isChg ? "bolt.fill" : "pause.fill",
-                        watts: formattedWatts(battChargeWatts),
+                        watts: Formatting.watts(battChargeWatts),
                         caption: isChg ? "В батарею" : "Пауза"
                     )
                 }
@@ -308,7 +381,7 @@ public struct MainPopoverView: View {
         }
     }
 
-    // MARK: - 3. Fixed 3-App Section (Приложения с высоким энергопотреблением)
+    // MARK: - 3. Fixed 3-App Section
     private var highEnergyAppsSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Приложения с высоким\nэнергопотреблением")
@@ -360,7 +433,7 @@ public struct MainPopoverView: View {
                     )
                 }
             }
-            .frame(height: 24 * 3 + 2 * 2) // Фиксированная высота 76pt (ровно на 3 слота) — меню не прыгает
+            .frame(height: 24 * 3 + 2 * 2)
         }
     }
 
@@ -377,7 +450,7 @@ public struct MainPopoverView: View {
 
                 Spacer()
             } else {
-                if let icon = energyService.appIcons[app.name] {
+                if let icon = energyService.appIcons[app.id] {
                     Image(nsImage: icon)
                         .resizable()
                         .frame(width: 17, height: 17)
@@ -396,7 +469,7 @@ public struct MainPopoverView: View {
                 Spacer(minLength: 4)
 
                 if settings.showCPUPercentageInMenu {
-                    Text(String(format: "%.0f%%", app.cpuUsage))
+                    Text(Formatting.percent(app.cpuUsage))
                         .font(.system(size: 10.5))
                         .foregroundStyle(.tertiary)
                         .monospacedDigit()
@@ -407,16 +480,11 @@ public struct MainPopoverView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
-                Image(systemName: "gauge.with.dots.needle.67percent")
+                Image(systemName: app.impact.iconName)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
         }
-    }
-
-    private func formattedWatts(_ watts: Double) -> String {
-        let val = String(format: "%.1f", watts).replacingOccurrences(of: ".", with: ",")
-        return "\(val) Вт"
     }
 
     private var menuDivider: some View {
@@ -448,44 +516,57 @@ public struct VisualEffectBlur: NSViewRepresentable {
 public struct NativeMenuItem: View {
     public let title: String
     public var shortcut: String? = nil
+    public var keyEquivalent: KeyEquivalent? = nil
     public var checkmark: Bool = false
+    public var isDisabled: Bool = false
     public let action: () -> Void
 
     @State private var isHovered: Bool = false
 
     public var body: some View {
-        Button(action: action) {
+        let btn = Button(action: action) {
             HStack(spacing: 6) {
                 if checkmark {
                     Image(systemName: "checkmark")
                         .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundStyle(isHovered ? .white : Color.primary)
+                        .foregroundStyle(isHovered && !isDisabled ? .white : Color.primary)
                         .frame(width: 14)
                 }
 
                 Text(title)
                     .font(.system(size: 12.5))
-                    .foregroundStyle(isHovered ? .white : Color.primary)
+                    .foregroundStyle(
+                        isDisabled
+                            ? Color.secondary.opacity(0.5)
+                            : (isHovered ? .white : Color.primary)
+                    )
 
                 Spacer()
 
                 if let sc = shortcut {
                     Text(sc)
                         .font(.system(size: 11.5))
-                        .foregroundStyle(isHovered ? Color.white.opacity(0.85) : Color.secondary)
+                        .foregroundStyle(isHovered && !isDisabled ? Color.white.opacity(0.85) : Color.secondary)
                 }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4.5)
             .background(
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(isHovered ? Color.accentColor : Color.clear)
+                    .fill(isHovered && !isDisabled ? Color.accentColor : Color.clear)
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(isDisabled)
         .onHover { inside in
             isHovered = inside
+        }
+
+        if let keyEquivalent {
+            btn.keyboardShortcut(keyEquivalent, modifiers: .command)
+        } else {
+            btn
         }
     }
 }

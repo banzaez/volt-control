@@ -4,22 +4,40 @@ import SwiftUI
 @MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     public func applicationDidFinishLaunching(_ notification: Notification) {
-        // Run as menu bar accessory by default (switches to .regular with Dock icon when Settings window is open)
         NSApp.setActivationPolicy(.accessory)
         NSApp.applicationIconImage = AppIconGenerator.makeImage(size: 512)
 
-        // Request user notification permissions
         NotificationService.shared.requestAuthorization()
 
-        // Start battery monitoring service first
+        HelperClient.shared.refreshStatus()
+        Task {
+            await HelperClient.shared.connectAndProbe()
+        }
+
+        MenuBarController.shared.setup()
         BatteryMonitor.shared.startMonitoring()
 
-        // Setup Menu Bar Item and Popover
-        MenuBarController.shared.setup()
+        let autoCheck = AppSettings.shared.autoCheckUpdates
+        AppUpdateService.shared.setAutoCheckEnabled(autoCheck)
+        if autoCheck {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(3))
+                AppUpdateService.shared.checkForUpdates(isUserInitiated: false)
+            }
+        }
     }
 
     public func applicationWillTerminate(_ notification: Notification) {
         BatteryMonitor.shared.stopMonitoring()
-        _ = SMCController.shared.setChargeInhibited(false)
+
+        var finished = false
+        Task { @MainActor in
+            await ChargeController.shared.resetOnTerminate()
+            finished = true
+        }
+        let deadline = Date().addingTimeInterval(0.3)
+        while !finished && Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+        }
     }
 }

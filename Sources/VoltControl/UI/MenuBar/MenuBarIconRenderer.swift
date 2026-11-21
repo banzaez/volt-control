@@ -11,7 +11,7 @@ public enum MenuBarIconRenderer {
     public static func renderIcon(info: BatteryInfo, settings: AppSettings) -> (NSImage, String) {
         let level = max(0, min(100, info.currentPercentage))
         let isAC = info.isACConnected
-        let isCharging = info.isCharging || (isAC && info.batteryPowerWatts > 0.25)
+        let isCharging = info.isEffectivelyCharging
         let isInhibited = isAC && !isCharging
         let style = settings.menuBarIconStyle
         let mode = settings.menuBarDisplayMode
@@ -50,7 +50,6 @@ public enum MenuBarIconRenderer {
             iconImage = img
         }
 
-        // Formatted text next to icon
         var titleString = ""
         switch mode {
         case .iconOnly:
@@ -58,40 +57,27 @@ public enum MenuBarIconRenderer {
         case .iconAndPercent:
             titleString = style == .glassPill ? "" : "\(level)%"
         case .iconAndWatts:
-            if isAC {
-                if isCharging {
-                    titleString = formatWattsSigned(abs(info.batteryPowerWatts))
-                } else {
-                    titleString = formatWattsUnsigned(info.systemPowerWatts)
-                }
-            } else {
-                titleString = formatWattsSigned(-abs(info.batteryPowerWatts))
-            }
+            titleString = wattsDisplayString(info: info, isAC: isAC, isCharging: isCharging)
         case .iconPercentAndWatts:
-            let wStr: String
-            if isAC {
-                wStr = isCharging ? formatWattsSigned(abs(info.batteryPowerWatts)) : formatWattsUnsigned(info.systemPowerWatts)
-            } else {
-                wStr = formatWattsSigned(-abs(info.batteryPowerWatts))
-            }
-            if style == .glassPill {
-                titleString = wStr
-            } else {
-                titleString = "\(level)% \(wStr)"
-            }
+            let wStr = wattsDisplayString(info: info, isAC: isAC, isCharging: isCharging)
+            titleString = style == .glassPill ? wStr : "\(level)% \(wStr)"
         case .iconAndTemp:
-            titleString = String(format: "%.1f°C", info.temperatureCelsius).replacingOccurrences(of: ".", with: ",")
+            titleString = Formatting.celsiusCompact(info.temperatureCelsius)
         }
 
         return (iconImage, titleString)
     }
 
-    private static func formatWattsSigned(_ watts: Double) -> String {
-        String(format: "%+.1f Вт", watts).replacingOccurrences(of: ".", with: ",")
-    }
-
-    private static func formatWattsUnsigned(_ watts: Double) -> String {
-        String(format: "%.1f Вт", watts).replacingOccurrences(of: ".", with: ",")
+    private static func wattsDisplayString(info: BatteryInfo, isAC: Bool, isCharging: Bool) -> String {
+        if isAC {
+            if isCharging {
+                return Formatting.watts(abs(info.batteryPowerWatts), signed: true)
+            } else {
+                return Formatting.watts(info.systemPowerWatts, signed: false)
+            }
+        } else {
+            return Formatting.watts(-abs(info.batteryPowerWatts), signed: true)
+        }
     }
 
     private static func resolveAccentColor(
@@ -113,8 +99,38 @@ public enum MenuBarIconRenderer {
         }
     }
 
-    /// Draws the Capsule Pill Battery with percentage inside + crisp vector charging bolt when on AC
-    /// Exact same outer size (35x16.5) as drawClassicBattery
+    private static func drawBatteryFrame(
+        primaryColor: NSColor,
+        cornerRadius: CGFloat,
+        borderAlpha: CGFloat,
+        capAlpha: CGFloat
+    ) {
+        let borderPath = NSBezierPath(roundedRect: batteryBodyRect, xRadius: cornerRadius, yRadius: cornerRadius)
+        borderPath.lineWidth = 1.2
+        primaryColor.withAlphaComponent(borderAlpha).setStroke()
+        borderPath.stroke()
+
+        let capPath = NSBezierPath(roundedRect: batteryCapRect, xRadius: 1.0, yRadius: 1.0)
+        primaryColor.withAlphaComponent(capAlpha).setFill()
+        capPath.fill()
+    }
+
+    private static func drawLevelFill(
+        level: Int,
+        primaryColor: NSColor,
+        inset: CGFloat,
+        minWidth: CGFloat,
+        cornerRadius: CGFloat,
+        fillAlpha: CGFloat
+    ) {
+        let insetRect = batteryBodyRect.insetBy(dx: inset, dy: inset)
+        let fillWidth = max(minWidth, insetRect.width * CGFloat(level) / 100.0)
+        let fillRect = NSRect(x: insetRect.minX, y: insetRect.minY, width: fillWidth, height: insetRect.height)
+        let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: cornerRadius, yRadius: cornerRadius)
+        primaryColor.withAlphaComponent(fillAlpha).setFill()
+        fillPath.fill()
+    }
+
     private static func drawPillBattery(
         level: Int,
         isACConnected: Bool,
@@ -123,9 +139,6 @@ public enum MenuBarIconRenderer {
         colorized: Bool
     ) -> NSImage {
         let image = NSImage(size: batteryCanvasSize, flipped: false) { _ in
-            let bodyRect = batteryBodyRect
-            let capRect = batteryCapRect
-
             let primaryColor = resolveAccentColor(
                 level: level,
                 isACConnected: isACConnected,
@@ -134,26 +147,16 @@ public enum MenuBarIconRenderer {
                 colorized: colorized
             )
 
-            // Outer capsule border
-            let borderPath = NSBezierPath(roundedRect: bodyRect, xRadius: 4.4, yRadius: 4.4)
-            borderPath.lineWidth = 1.2
-            primaryColor.withAlphaComponent(0.82).setStroke()
-            borderPath.stroke()
+            drawBatteryFrame(primaryColor: primaryColor, cornerRadius: 4.4, borderAlpha: 0.82, capAlpha: 0.68)
+            drawLevelFill(
+                level: level,
+                primaryColor: primaryColor,
+                inset: 1.6,
+                minWidth: 2.5,
+                cornerRadius: 2.8,
+                fillAlpha: colorized ? 0.38 : 0.26
+            )
 
-            // Positive terminal cap
-            let capPath = NSBezierPath(roundedRect: capRect, xRadius: 1.0, yRadius: 1.0)
-            primaryColor.withAlphaComponent(0.68).setFill()
-            capPath.fill()
-
-            // Proportional inner level fill
-            let insetRect = bodyRect.insetBy(dx: 1.6, dy: 1.6)
-            let fillWidth = max(2.5, insetRect.width * CGFloat(level) / 100.0)
-            let fillRect = NSRect(x: insetRect.minX, y: insetRect.minY, width: fillWidth, height: insetRect.height)
-            let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: 2.8, yRadius: 2.8)
-            primaryColor.withAlphaComponent(colorized ? 0.38 : 0.26).setFill()
-            fillPath.fill()
-
-            // Percentage text + optional vector bolt when charger is connected
             let text = "\(level)"
             let fontSize: CGFloat = isACConnected ? (level == 100 ? 8.2 : 9.0) : 9.6
             let font = NSFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .bold)
@@ -172,11 +175,11 @@ public enum MenuBarIconRenderer {
                 let boltWidth: CGFloat = 5.5
                 let spacing: CGFloat = 1.2
                 let totalContentWidth = strSize.width + spacing + boltWidth
-                let startX = bodyRect.midX - totalContentWidth / 2.0
+                let startX = batteryBodyRect.midX - totalContentWidth / 2.0
 
                 let textRect = NSRect(
                     x: startX,
-                    y: bodyRect.midY - strSize.height / 2.0 + 0.2,
+                    y: batteryBodyRect.midY - strSize.height / 2.0 + 0.2,
                     width: strSize.width,
                     height: strSize.height
                 )
@@ -184,14 +187,14 @@ public enum MenuBarIconRenderer {
 
                 let boltCenter = NSPoint(
                     x: startX + strSize.width + spacing + boltWidth / 2.0,
-                    y: bodyRect.midY
+                    y: batteryBodyRect.midY
                 )
                 drawVectorBolt(center: boltCenter, height: 8.5, color: NSColor.labelColor, filled: isCharging)
             } else {
                 let textRect = NSRect(
-                    x: bodyRect.minX,
-                    y: bodyRect.midY - strSize.height / 2.0 + 0.2,
-                    width: bodyRect.width,
+                    x: batteryBodyRect.minX,
+                    y: batteryBodyRect.midY - strSize.height / 2.0 + 0.2,
+                    width: batteryBodyRect.width,
                     height: strSize.height
                 )
                 attrStr.draw(in: textRect)
@@ -203,8 +206,6 @@ public enum MenuBarIconRenderer {
         return image
     }
 
-    /// Draws the Classic Battery with proportional level bar + crisp vector bolt when on AC
-    /// Exact same outer size (35x16.5) as drawPillBattery
     private static func drawClassicBattery(
         level: Int,
         isACConnected: Bool,
@@ -213,9 +214,6 @@ public enum MenuBarIconRenderer {
         colorized: Bool
     ) -> NSImage {
         let image = NSImage(size: batteryCanvasSize, flipped: false) { _ in
-            let bodyRect = batteryBodyRect
-            let capRect = batteryCapRect
-
             let primaryColor = resolveAccentColor(
                 level: level,
                 isACConnected: isACConnected,
@@ -224,28 +222,18 @@ public enum MenuBarIconRenderer {
                 colorized: colorized
             )
 
-            // Outer battery border
-            let borderPath = NSBezierPath(roundedRect: bodyRect, xRadius: 3.6, yRadius: 3.6)
-            borderPath.lineWidth = 1.2
-            primaryColor.withAlphaComponent(0.85).setStroke()
-            borderPath.stroke()
+            drawBatteryFrame(primaryColor: primaryColor, cornerRadius: 3.6, borderAlpha: 0.85, capAlpha: 0.72)
+            drawLevelFill(
+                level: level,
+                primaryColor: primaryColor,
+                inset: 2.0,
+                minWidth: 2.2,
+                cornerRadius: 2.0,
+                fillAlpha: isACConnected ? 0.35 : 0.78
+            )
 
-            // Positive terminal cap
-            let capPath = NSBezierPath(roundedRect: capRect, xRadius: 1.0, yRadius: 1.0)
-            primaryColor.withAlphaComponent(0.72).setFill()
-            capPath.fill()
-
-            // Inner battery capacity bar
-            let insetRect = bodyRect.insetBy(dx: 2.0, dy: 2.0)
-            let fillWidth = max(2.2, insetRect.width * CGFloat(level) / 100.0)
-            let fillRect = NSRect(x: insetRect.minX, y: insetRect.minY, width: fillWidth, height: insetRect.height)
-            let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: 2.0, yRadius: 2.0)
-            primaryColor.withAlphaComponent(isACConnected ? 0.35 : 0.78).setFill()
-            fillPath.fill()
-
-            // When charger is connected, draw crisp centered lightning bolt
             if isACConnected {
-                let boltCenter = NSPoint(x: bodyRect.midX, y: bodyRect.midY)
+                let boltCenter = NSPoint(x: batteryBodyRect.midX, y: batteryBodyRect.midY)
                 drawVectorBolt(center: boltCenter, height: 9.8, color: NSColor.labelColor, filled: isCharging)
             }
 

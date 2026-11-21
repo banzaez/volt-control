@@ -9,3 +9,5 @@ DerivedData/
 VoltControl.app/
 *.app
 *.zip
+
+certificates/

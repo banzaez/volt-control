@@ -1,5 +1,14 @@
 import Foundation
 import SwiftUI
+import VoltCore
+
+public enum ChargeControlStatus: Sendable, Equatable {
+    case helperMissing
+    case needsApproval
+    case active(ChargeMode)
+    case unsupported(ChargeMode)
+    case failed(String)
+}
 
 /// Represents the high-level power state of the MacBook
 public enum BatteryState: String, Sendable {
@@ -11,31 +20,21 @@ public enum BatteryState: String, Sendable {
 
     public var iconName: String {
         switch self {
-        case .charging:
-            return "bolt.fill"
-        case .discharging:
-            return "arrow.down.right"
-        case .pluggedInPaused:
-            return "pause.fill"
-        case .pluggedInFull:
-            return "checkmark.circle.fill"
-        case .unknown:
-            return "questionmark.circle"
+        case .charging: return "bolt.fill"
+        case .discharging: return "arrow.down.right"
+        case .pluggedInPaused: return "pause.fill"
+        case .pluggedInFull: return "checkmark.circle.fill"
+        case .unknown: return "questionmark.circle"
         }
     }
 
     public var statusColor: Color {
         switch self {
-        case .charging:
-            return .green
-        case .discharging:
-            return .blue
-        case .pluggedInPaused:
-            return .orange
-        case .pluggedInFull:
-            return .teal
-        case .unknown:
-            return .secondary
+        case .charging: return .green
+        case .discharging: return .blue
+        case .pluggedInPaused: return .orange
+        case .pluggedInFull: return .teal
+        case .unknown: return .secondary
         }
     }
 }
@@ -58,7 +57,7 @@ public struct BatteryInfo: Sendable {
 
     public var voltageVolts: Double = 0.0
     public var amperageMilliAmps: Int = 0
-    public var temperatureCelsius: Double = 0.0
+    public var temperatureCelsius: Double? = nil
 
     public var cycleCount: Int = 0
     public var designCapacityMah: Int = 0
@@ -67,10 +66,28 @@ public struct BatteryInfo: Sendable {
 
     public var timeRemainingMinutes: Int? = nil
     public var elapsedTimeSeconds: Int = 0
-    public var isChargingInhibited: Bool = false
-    public var requiresPrivilegedHelper: Bool = false
     public var isTopUpActive: Bool = false
-    public var chargeLimit: Int = 80
+    public var appChargeLimit: Int = 80
+    public var systemChargeLimit: Int? = nil
+    public var controlStatus: ChargeControlStatus = .helperMissing
+
+    /// Effective charge limit = min(appChargeLimit, systemChargeLimit ?? 100)
+    public var chargeLimit: Int {
+        min(appChargeLimit, systemChargeLimit ?? 100)
+    }
+
+    public var isEffectivelyCharging: Bool {
+        isCharging || (isACConnected && batteryPowerWatts > 0.25)
+    }
+
+    public var isChargingInhibited: Bool {
+        switch controlStatus {
+        case .active(.inhibit), .active(.discharge):
+            return true
+        default:
+            return false
+        }
+    }
 
     public var state: BatteryState {
         if !isACConnected {
@@ -130,46 +147,45 @@ public struct BatteryInfo: Sendable {
         guard let minutes = timeRemainingMinutes, minutes > 0, minutes < 65535 else {
             return "Расчёт..."
         }
-        let hours = minutes / 60
-        let mins = minutes % 60
-        if hours > 0 {
-            return "\(hours) ч \(mins) мин"
-        } else {
-            return "\(mins) мин"
-        }
+        return Formatting.duration(minutes: minutes)
     }
 
     public var elapsedTimeFormatted: String {
-        guard elapsedTimeSeconds > 0 else { return "0 мин" }
-        let hours = elapsedTimeSeconds / 3600
-        let mins = (elapsedTimeSeconds % 3600) / 60
-        if hours > 0 {
-            return "\(hours) ч \(mins) мин"
-        } else {
-            return "\(mins) мин"
-        }
+        Formatting.duration(seconds: elapsedTimeSeconds)
     }
 
     public var appModeDescription: String {
         if !isACConnected {
             return "Работа от батареи"
         }
-        if requiresPrivilegedHelper {
-            return "Требуется хелпер"
-        }
-        if isTopUpActive {
-            return "Полная зарядка"
-        }
-        if isChargingInhibited {
+        switch controlStatus {
+        case .helperMissing:
+            return "Требуется демон SMC"
+        case .needsApproval:
+            return "Требуется разрешение в Настройках"
+        case .unsupported:
+            if let sys = systemChargeLimit {
+                return "Системный лимит macOS (\(sys)%)"
+            }
+            return "Управление SMC недоступно"
+        case .failed:
+            return "Ошибка управления SMC"
+        case .active(.discharge):
+            return "Работа от батареи (от сети)"
+        case .active(.inhibit):
             return "Обход батареи"
+        case .active(.normal):
+            if isTopUpActive {
+                return "Полная зарядка"
+            }
+            if chargeLimit < 100 && currentPercentage >= chargeLimit {
+                return "Поддержание лимита"
+            }
+            if isCharging {
+                return chargeLimit < 100 ? "Ограничение заряда" : "Зарядка"
+            }
+            return "Питание от сети"
         }
-        if chargeLimit < 100 && currentPercentage >= chargeLimit {
-            return "Поддержание лимита"
-        }
-        if isCharging {
-            return chargeLimit < 100 ? "Ограничение заряда" : "Зарядка"
-        }
-        return "Питание от сети"
     }
 
     public static let initial = BatteryInfo()

@@ -16,10 +16,6 @@ public final class MenuBarController: NSObject, NSWindowDelegate, NSPopoverDeleg
 
     @MainActor
     public func setup() {
-        // Assign the Blue Side-View Lego Brick App Icon to NSApp
-        NSApp.applicationIconImage = AppIconGenerator.makeImage(size: 512)
-
-        // Create NSStatusItem
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem?.button {
@@ -28,7 +24,6 @@ public final class MenuBarController: NSObject, NSWindowDelegate, NSPopoverDeleg
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
-        // Create NSPopover
         let pop = NSPopover()
         pop.behavior = .transient
         pop.animates = true
@@ -47,7 +42,10 @@ public final class MenuBarController: NSObject, NSWindowDelegate, NSPopoverDeleg
         pop.contentViewController = hostingController
         self.popover = pop
 
-        // Update menu bar appearance immediately
+        BatteryMonitor.shared.onUpdate = { [weak self] info in
+            self?.updateMenuBar(with: info)
+        }
+
         updateMenuBar(force: true)
     }
 
@@ -58,8 +56,8 @@ public final class MenuBarController: NSObject, NSWindowDelegate, NSPopoverDeleg
         let info = providedInfo ?? BatteryMonitor.shared.info
         let settings = AppSettings.shared
 
-        // Optimization: Dirty check to avoid redundant image creation and CoreGraphics drawing
-        let renderKey = "\(info.currentPercentage)_\(info.isACConnected)_\(info.isCharging)_\(info.isChargingInhibited)_\(settings.menuBarIconStyle.rawValue)_\(settings.menuBarDisplayMode.rawValue)_\(settings.menuBarColorizedIcon)_\(Int(info.batteryPowerWatts * 10))_\(Int(info.systemPowerWatts * 10))_\(Int(info.temperatureCelsius * 10))"
+        let tempKey = info.temperatureCelsius.map { Int($0 * 10) } ?? -1
+        let renderKey = "\(info.currentPercentage)_\(info.isACConnected)_\(info.isCharging)_\(info.isChargingInhibited)_\(settings.menuBarIconStyle.rawValue)_\(settings.menuBarDisplayMode.rawValue)_\(settings.menuBarColorizedIcon)_\(Int(info.batteryPowerWatts * 10))_\(Int(info.systemPowerWatts * 10))_\(tempKey)"
 
         if !force && renderKey == lastRenderKey {
             return
@@ -116,9 +114,7 @@ public final class MenuBarController: NSObject, NSWindowDelegate, NSPopoverDeleg
     public func openSettings() {
         popover?.performClose(nil)
 
-        // Show app icon in Dock & Cmd+Tab while Settings window is open
         NSApp.setActivationPolicy(.regular)
-        NSApp.applicationIconImage = AppIconGenerator.makeImage(size: 512)
 
         if settingsWindow == nil {
             let settingsView = SettingsView()

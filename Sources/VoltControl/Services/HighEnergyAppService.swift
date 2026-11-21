@@ -43,6 +43,13 @@ public struct HighEnergyApp: Identifiable, Sendable {
     }
 }
 
+private struct ProcessRow: Sendable {
+    let pid: Int32
+    let ppid: Int32
+    let cpu: Double
+    let comm: String
+}
+
 @MainActor
 @Observable
 public final class HighEnergyAppService {
@@ -55,23 +62,16 @@ public final class HighEnergyAppService {
         HighEnergyApp(id: "slot-2", name: "—", impact: .low, cpuUsage: 0, isPlaceholder: true)
     ]
 
-    public var topFourSlots: [HighEnergyApp] {
-        topThreeSlots
-    }
-
     public var hasRealApps: Bool {
         topThreeSlots.contains(where: { !$0.isPlaceholder })
     }
 
     public private(set) var appIcons: [String: NSImage] = [:]
 
-    private var timer: Timer?
+    @ObservationIgnored private var timer: Timer?
     public private(set) var isMenuVisible: Bool = false
 
-    private init() {
-        // Initial snapshot for instant availability on first menu open
-        refresh()
-    }
+    private init() {}
 
     public func setMenuVisible(_ visible: Bool) {
         guard self.isMenuVisible != visible else { return }
@@ -80,15 +80,9 @@ public final class HighEnergyAppService {
             refresh()
             scheduleTimer()
         } else {
-            // Stop high-frequency polling when the menu is closed to save battery & CPU
             timer?.invalidate()
             timer = nil
         }
-    }
-
-    public func start() {
-        refresh()
-        scheduleTimer()
     }
 
     public func scheduleTimer() {
@@ -97,7 +91,7 @@ public final class HighEnergyAppService {
         let interval = max(2.0, AppSettings.shared.processScanIntervalSeconds)
         let newTimer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self = self, self.isMenuVisible else { return }
+                guard let self, self.isMenuVisible else { return }
                 self.refresh()
             }
         }
@@ -113,36 +107,36 @@ public final class HighEnergyAppService {
         let showLow = AppSettings.shared.showLowEnergyApps
         let ignoredSet = AppSettings.shared.parsedIgnoredApps()
 
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            let pipe = Pipe()
-            let proc = Process()
-            proc.executableURL = URL(fileURLWithPath: "/bin/ps")
-            proc.arguments = ["-Aceo", "%cpu,comm"]
-            proc.standardOutput = pipe
-            do {
-                try proc.run()
-            } catch {
-                return
+        Task.detached(priority: .utility) { [weak self] in
+            let rows = Self.readProcesses()
+            guard !rows.isEmpty else { return }
+
+            var childrenByParent: [Int32: [Int32]] = [:]
+            var cpuByPid: [Int32: Double] = [:]
+            var cpuByComm: [String: Double] = [:]
+
+            for row in rows {
+                childrenByParent[row.ppid, default: []].append(row.pid)
+                cpuByPid[row.pid] = row.cpu
+                cpuByComm[row.comm, default: 0.0] += row.cpu
             }
 
-            // Read before waitUntilExit to prevent pipe buffer deadlock
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            proc.waitUntilExit()
-            guard let output = String(data: data, encoding: .utf8) else { return }
-
-            var cpuMap: [String: Double] = [:]
-            for line in output.components(separatedBy: "\n").dropFirst() {
-                let parts = line.trimmingCharacters(in: .whitespaces).split(separator: " ", maxSplits: 1)
-                if parts.count == 2, let cpu = Double(parts[0]) {
-                    let comm = String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !comm.isEmpty {
-                        cpuMap[comm, default: 0.0] += cpu
+            func totalCPUForTree(rootPid: Int32) -> Double {
+                var stack: [Int32] = [rootPid]
+                var visited = Set<Int32>()
+                var sum = 0.0
+                while let current = stack.popLast() {
+                    guard visited.insert(current).inserted else { continue }
+                    sum += cpuByPid[current] ?? 0.0
+                    if let children = childrenByParent[current] {
+                        stack.append(contentsOf: children)
                     }
                 }
+                return sum
             }
 
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
+            await MainActor.run { [weak self] in
+                guard let self else { return }
                 let runningApps = NSWorkspace.shared.runningApplications.filter { app in
                     guard app.bundleIdentifier != Bundle.main.bundleIdentifier else { return false }
                     if includeSystem {
@@ -154,51 +148,26 @@ public final class HighEnergyAppService {
 
                 var detected: [HighEnergyApp] = []
                 var icons: [String: NSImage] = [:]
-                var matchedNames: Set<String> = []
+                var matchedIDs = Set<String>()
 
                 for app in runningApps {
                     guard let name = app.localizedName, !name.isEmpty else { continue }
                     if ignoredSet.contains(name.lowercased()) { continue }
-                    guard !matchedNames.contains(name) else { continue }
-                    matchedNames.insert(name)
 
-                    let bundleName = app.bundleURL?.lastPathComponent.replacingOccurrences(of: ".app", with: "") ?? name
+                    let appID = app.bundleIdentifier ?? name
+                    guard matchedIDs.insert(appID).inserted else { continue }
 
-                    var total = (cpuMap[name] ?? 0.0)
-                    if bundleName != name {
-                        total += (cpuMap[bundleName] ?? 0.0)
-                    }
-                    for (k, v) in cpuMap where k != name && k != bundleName {
-                        if k.hasPrefix(name) || k.hasPrefix(bundleName) {
-                            total += v
-                        }
-                    }
+                    let total = totalCPUForTree(rootPid: app.processIdentifier)
+                    let impact = Self.classifyImpact(
+                        cpu: total,
+                        highThreshold: highThreshold,
+                        veryHighThreshold: veryHighThreshold
+                    )
 
-                    let impact: EnergyImpactLevel
-                    if total >= veryHighThreshold {
-                        impact = .veryHigh
-                    } else if total >= highThreshold {
-                        impact = .high
-                    } else if total >= max(1.0, highThreshold * 0.4) {
-                        impact = .moderate
-                    } else {
-                        impact = .low
-                    }
-
-                    let shouldInclude: Bool
-                    switch impact {
-                    case .veryHigh, .high:
-                        shouldInclude = true
-                    case .moderate:
-                        shouldInclude = showModerate
-                    case .low:
-                        shouldInclude = showLow
-                    }
-
-                    if shouldInclude {
-                        detected.append(HighEnergyApp(name: name, impact: impact, cpuUsage: total))
+                    if Self.shouldInclude(impact: impact, showModerate: showModerate, showLow: showLow) {
+                        detected.append(HighEnergyApp(id: appID, name: name, impact: impact, cpuUsage: total))
                         if let icon = app.icon {
-                            icons[name] = icon
+                            icons[appID] = icon
                         }
                     }
                 }
@@ -206,19 +175,14 @@ public final class HighEnergyAppService {
                 if includeSystem {
                     let sysCandidates = ["WindowServer", "kernel_task", "mds_stores", "cloudd", "coreaudiod"]
                     for sysName in sysCandidates where !ignoredSet.contains(sysName.lowercased()) {
-                        if let cpu = cpuMap[sysName], cpu >= highThreshold * 0.5 {
-                            let impact: EnergyImpactLevel = cpu >= veryHighThreshold ? .veryHigh : (cpu >= highThreshold ? .high : .moderate)
-                            let shouldIncludeSys: Bool
-                            switch impact {
-                            case .veryHigh, .high:
-                                shouldIncludeSys = true
-                            case .moderate:
-                                shouldIncludeSys = showModerate
-                            case .low:
-                                shouldIncludeSys = showLow
-                            }
-                            if shouldIncludeSys {
-                                detected.append(HighEnergyApp(name: sysName, impact: impact, cpuUsage: cpu))
+                        if let cpu = cpuByComm[sysName], cpu >= highThreshold * 0.5 {
+                            let impact = Self.classifyImpact(
+                                cpu: cpu,
+                                highThreshold: highThreshold,
+                                veryHighThreshold: veryHighThreshold
+                            )
+                            if Self.shouldInclude(impact: impact, showModerate: showModerate, showLow: showLow) {
+                                detected.append(HighEnergyApp(id: "sys:\(sysName)", name: sysName, impact: impact, cpuUsage: cpu))
                             }
                         }
                     }
@@ -243,6 +207,62 @@ public final class HighEnergyAppService {
                 self.topThreeSlots = slots
                 self.appIcons = icons
             }
+        }
+    }
+
+    private nonisolated static func readProcesses() -> [ProcessRow] {
+        let pipe = Pipe()
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/ps")
+        proc.arguments = ["-Aeo", "pid=,ppid=,%cpu=,comm="]
+        proc.standardOutput = pipe
+        proc.standardError = Pipe()
+        do {
+            try proc.run()
+        } catch {
+            return []
+        }
+
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        proc.waitUntilExit()
+        guard let output = String(data: data, encoding: .utf8) else { return [] }
+
+        var rows: [ProcessRow] = []
+        for line in output.split(separator: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let parts = trimmed.split(maxSplits: 3, omittingEmptySubsequences: true, whereSeparator: { $0 == " " || $0 == "\t" })
+            guard parts.count == 4,
+                  let pid = Int32(parts[0]),
+                  let ppid = Int32(parts[1]),
+                  let cpu = Double(parts[2].replacingOccurrences(of: ",", with: ".")) else {
+                continue
+            }
+            let rawComm = String(parts[3]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let commName = URL(fileURLWithPath: rawComm).lastPathComponent
+            if !commName.isEmpty {
+                rows.append(ProcessRow(pid: pid, ppid: ppid, cpu: cpu, comm: commName))
+            }
+        }
+        return rows
+    }
+
+    private nonisolated static func classifyImpact(cpu: Double, highThreshold: Double, veryHighThreshold: Double) -> EnergyImpactLevel {
+        if cpu >= veryHighThreshold {
+            return .veryHigh
+        } else if cpu >= highThreshold {
+            return .high
+        } else if cpu >= max(1.0, highThreshold * 0.4) {
+            return .moderate
+        } else {
+            return .low
+        }
+    }
+
+    private nonisolated static func shouldInclude(impact: EnergyImpactLevel, showModerate: Bool, showLow: Bool) -> Bool {
+        switch impact {
+        case .veryHigh, .high: return true
+        case .moderate: return showModerate
+        case .low: return showLow
         }
     }
 }

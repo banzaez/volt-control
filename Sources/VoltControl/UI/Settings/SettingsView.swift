@@ -47,9 +47,10 @@ public struct SettingsView: View {
     @Bindable var settings = AppSettings.shared
     @Bindable var monitor = BatteryMonitor.shared
     @Bindable var energyService = HighEnergyAppService.shared
+    @Bindable var helper = HelperClient.shared
+    @Bindable var updateService = AppUpdateService.shared
 
     @State private var selectedSection: SettingsSection = .charging
-    @State private var helperStatusText: String = ""
 
     public init() {}
 
@@ -93,6 +94,19 @@ public struct SettingsView: View {
             .background(Color(nsColor: .windowBackgroundColor))
         }
         .frame(minWidth: 680, idealWidth: 700, minHeight: 560, idealHeight: 620)
+        .onChange(of: settings.pollingIntervalSeconds) { _, _ in
+            monitor.rescheduleTimer()
+        }
+        .onChange(of: settings.chargeLimit) { _, _ in monitor.fetchSnapshot() }
+        .onChange(of: settings.isTopUpActive) { _, _ in monitor.fetchSnapshot() }
+        .onChange(of: settings.isChargingPaused) { _, _ in monitor.fetchSnapshot() }
+        .onChange(of: settings.sailingModeEnabled) { _, _ in monitor.fetchSnapshot() }
+        .onChange(of: settings.sailingDelta) { _, _ in monitor.fetchSnapshot() }
+        .onChange(of: settings.tempProtectionEnabled) { _, _ in monitor.fetchSnapshot() }
+        .onChange(of: settings.maxAllowedTempCelsius) { _, _ in monitor.fetchSnapshot() }
+        .onChange(of: settings.autoCheckUpdates) { _, enabled in
+            updateService.setAutoCheckEnabled(enabled)
+        }
     }
 
     // MARK: - Sidebar
@@ -104,7 +118,7 @@ public struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("VoltControl")
                         .font(.system(size: 13.5, weight: .semibold))
-                    Text("\(monitor.info.currentPercentage)% • \(String(format: "%.1f Вт", monitor.info.systemPowerWatts).replacingOccurrences(of: ".", with: ","))")
+                    Text("\(monitor.info.currentPercentage)% • \(Formatting.watts(monitor.info.systemPowerWatts))")
                         .font(.system(size: 10.5))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
@@ -205,6 +219,15 @@ public struct SettingsView: View {
                     subtitle: "Позволяет сразу видеть изменение потока мощности после нажатия кнопок",
                     isOn: $settings.keepMenuOpenOnAction
                 )
+
+                Divider().opacity(0.35)
+
+                GlassToggleRow(
+                    icon: "arrow.triangle.2.circlepath.circle",
+                    title: "Автоматически проверять обновления",
+                    subtitle: "Фоновая проверка новых версий через Sparkle",
+                    isOn: $settings.autoCheckUpdates
+                )
             }
             .glassCard()
 
@@ -238,6 +261,32 @@ public struct SettingsView: View {
     // MARK: - 2. Зарядка (Charging)
     private var chargingSectionContent: some View {
         VStack(alignment: .leading, spacing: 14) {
+            if let sysLimit = monitor.info.systemChargeLimit, sysLimit < 100 {
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.orange)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Активен системный лимит macOS: \(sysLimit)%")
+                            .font(.system(size: 12.5, weight: .medium))
+                        Text("Эффективный лимит будет равен min(\(settings.chargeLimit)%, \(sysLimit)%) = \(monitor.info.chargeLimit)%. Управляется в Системных настройках.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Button("Открыть") {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .controlSize(.small)
+                }
+                .glassCard()
+            }
+
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -724,7 +773,7 @@ public struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Text(String(format: "%.1f %%", info.healthPercentage).replacingOccurrences(of: ".", with: ","))
+                    Text(Formatting.percent(info.healthPercentage, digits: 1))
                         .font(.system(size: 18, weight: .bold, design: .rounded))
                         .foregroundStyle(Color.blue)
                         .monospacedDigit()
@@ -777,14 +826,14 @@ public struct SettingsView: View {
 
                 diagMetricCard(
                     title: "Температура",
-                    value: String(format: "%.1f °C", info.temperatureCelsius).replacingOccurrences(of: ".", with: ","),
+                    value: Formatting.celsius(info.temperatureCelsius),
                     subtitle: "Датчик аккумулятора",
                     icon: "thermometer.medium"
                 )
 
                 diagMetricCard(
                     title: "Напряжение",
-                    value: String(format: "%.2f В", info.voltageVolts).replacingOccurrences(of: ".", with: ","),
+                    value: Formatting.volts(info.voltageVolts),
                     subtitle: "Текущий вольтаж",
                     icon: "bolt.fill"
                 )
@@ -798,15 +847,15 @@ public struct SettingsView: View {
 
                 diagMetricCard(
                     title: "Мощность батареи",
-                    value: String(format: "%+.1f Вт", info.batteryPowerWatts).replacingOccurrences(of: ".", with: ","),
+                    value: Formatting.watts(info.batteryPowerWatts, signed: true),
                     subtitle: info.batteryPowerWatts >= 0.1 ? "Заряд в батарею" : (info.isACConnected ? "Пауза / Обход" : "Разряд из батареи"),
                     icon: "battery.100percent.bolt"
                 )
 
                 diagMetricCard(
                     title: "Расход Mac",
-                    value: String(format: "%.1f Вт", info.systemPowerWatts).replacingOccurrences(of: ".", with: ","),
-                    subtitle: info.isACConnected ? String(format: "Адаптер: %.1f Вт", info.adapterPowerWatts).replacingOccurrences(of: ".", with: ",") : "От аккумулятора",
+                    value: Formatting.watts(info.systemPowerWatts),
+                    subtitle: info.isACConnected ? "Адаптер: \(Formatting.watts(info.adapterPowerWatts))" : "От аккумулятора",
                     icon: "laptopcomputer"
                 )
             }
@@ -942,49 +991,87 @@ public struct SettingsView: View {
                 Divider().opacity(0.35)
 
                 HStack(spacing: 12) {
-                    let isPriv = SMCController.shared.status == .activePrivileged
+                    let isEnabled = helper.status == .enabled
                     ZStack {
                         RoundedRectangle(cornerRadius: 7, style: .continuous)
                             .fill(Color.blue.opacity(0.12))
                             .frame(width: 30, height: 30)
-                        Image(systemName: isPriv ? "lock.open.fill" : "lock.fill")
+                        Image(systemName: isEnabled ? "lock.open.fill" : "lock.fill")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(Color.blue)
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(isPriv ? "Аппаратная запись SMC: Активна" : "Аппаратная запись SMC: Пользовательский режим")
+                        Text("Системный демон SMC: \(helper.status.localizedTitle)")
                             .font(.system(size: 12.5, weight: .medium))
-                        Text("Управление ключами контроллера заряда (CH0B, CH0C, B0CM, BCLM) для аппаратной остановки зарядки.")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
+                        if let caps = helper.capabilities {
+                            Text("Остановка зарядки: \(caps.inhibitMethod?.rawValue.uppercased() ?? "недоступно") • Отключение адаптера: \(caps.adapterMethod?.rawValue.uppercased() ?? "недоступно")")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Управление зарядкой через launchd-демон (SMAppService + XPC).")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
             .glassCard()
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("Привилегированный доступ SMC")
+                Text("Управление демоном SMC")
                     .font(.system(size: 12.5, weight: .medium))
 
-                Text("Для аппаратного переключения ключей ограничения заряда на уровне SMC требуются права администратора.")
+                Text("Для записи в ключи контроллера заряда используется фоновый системный сервис macOS (Объекты входа).")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
 
-                HStack {
-                    Button(action: installHelperScript) {
-                        Text("Запросить права администратора")
+                HStack(spacing: 10) {
+                    if helper.status == .notRegistered || helper.status == .notFound {
+                        Button("Установить демон") {
+                            helper.register()
+                            monitor.fetchSnapshot()
+                        }
+                    } else if helper.status == .requiresApproval {
+                        Button("Разрешить в Настройках") {
+                            helper.openSystemSettings()
+                        }
+                    } else if helper.status == .enabled {
+                        Button("Обновить диагностику") {
+                            Task {
+                                await helper.refreshDiagnostics()
+                                monitor.fetchSnapshot()
+                            }
+                        }
+                        Button("Удалить демон", role: .destructive) {
+                            Task {
+                                await helper.unregister()
+                                monitor.fetchSnapshot()
+                            }
+                        }
+                    } else {
+                        Button("Повторить установку") {
+                            helper.register()
+                        }
                     }
-                    .controlSize(.regular)
+                }
+                .controlSize(.regular)
 
-                    if !helperStatusText.isEmpty {
-                        Text(helperStatusText)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
+                if !helper.diagnostics.isEmpty {
+                    Divider().opacity(0.35)
+                    Text("Диагностика ключей SMC")
+                        .font(.system(size: 11.5, weight: .medium))
+                    Text(helper.diagnostics)
+                        .font(.system(size: 10.5, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             .glassCard()
+        }
+        .task {
+            await helper.connectAndProbe()
         }
     }
 
@@ -997,9 +1084,37 @@ public struct SettingsView: View {
             VStack(spacing: 3) {
                 Text("VoltControl")
                     .font(.system(size: 18, weight: .semibold))
-                Text("Версия 1.0.0")
+                Text("Версия \(updateService.currentVersion) (\(updateService.currentBuild))")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 10) {
+                Button("Проверить обновления") {
+                    updateService.checkForUpdates(isUserInitiated: true)
+                }
+                .disabled(updateService.isChecking)
+
+                switch updateService.status {
+                case .checking:
+                    ProgressView()
+                        .controlSize(.small)
+                case .upToDate(let ver):
+                    Text("Установлена актуальная версия (\(ver))")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                case .updateAvailable(let ver, _, _, _):
+                    Text("Доступно обновление \(ver)")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.blue)
+                case .failed(let msg):
+                    Text(msg)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red)
+                        .lineLimit(1)
+                case .idle:
+                    EmptyView()
+                }
             }
 
             Text("Утилита для мониторинга распределения мощности в ваттах, контроля энергоемких процессов и управления зарядкой аккумулятора MacBook.")
@@ -1015,7 +1130,7 @@ public struct SettingsView: View {
                 Divider().opacity(0.3)
                 aboutInfoRow(label: "Уведомления питания", value: "IOPSNotificationRunLoopSource")
                 Divider().opacity(0.3)
-                aboutInfoRow(label: "Платформа", value: "macOS (Apple Silicon & Intel)")
+                aboutInfoRow(label: "Платформа", value: "macOS (Apple Silicon)")
             }
             .glassCard()
         }
@@ -1030,14 +1145,6 @@ public struct SettingsView: View {
             Spacer()
             Text(value)
                 .font(.system(size: 11.5, weight: .medium))
-        }
-    }
-
-    private func installHelperScript() {
-        let (success, message) = SMCController.shared.installPrivilegedHelper()
-        helperStatusText = message
-        if success {
-            BatteryMonitor.shared.fetchSnapshot()
         }
     }
 }
